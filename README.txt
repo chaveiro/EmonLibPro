@@ -6,6 +6,7 @@
  |______|_| |_| |_|\___/|_| |_|______|_|_.__/|_|   |_|  \___/ 
                                                              
 * Example folder contains an Arduino Library Demo.
+* Help and support: http://openenergymonitor.org/emon/node/2406
 
 
 Energy monitor Library Pro 
