@@ -26,5 +26,5 @@ Author: Nuno Chaveiro  nchaveiro[at]gmail.com  Lisbon, Portugal
 
 History:
 1.0 - 25-05-2013 - First public release.
-
+1.1 - 02-06-2013 - Added suport for ADC pin MAP and revised freq calculations an timer1 fix.
 
