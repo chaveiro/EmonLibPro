@@ -5,6 +5,8 @@
     Interrupt based, implements a zero cross detector and phase-locked loop for better precision.
     Completely line frequency independent.
     
+    Get latest version at https://github.com/chaveiro/EmonLibPro
+    
     Copyright (C) 2013  Nuno Chaveiro  nchaveiro[at]gmail.com  Lisbon, Portugal
 
     This program is free software: you can redistribute it and/or modify
@@ -37,7 +39,7 @@
 
 // User configurable Section 
 
-#define VOLTSCOUNT 1      // Number of V sensors installed, can be 1 or CURRENTCOUNT number of voltage sensors
+#define VOLTSCOUNT 1	    // Number of V sensors installed, can be 1 or CURRENTCOUNT number of voltage sensors
 #define CURRENTCOUNT 2      // Number of CT sensors installed.
 
 #define V1CAL 245.23        // calculated value is 243:10.9 for transformer x 11:1 for resistor divider = 122.61
@@ -79,8 +81,12 @@
 
 //##################################################################################################
 // Variables
+
+//const byte adc_pin_order[] = {4,1,2,3,0,5};     // ADC pin sampling order remap. First values must be Voltage, last Current.
+const byte adc_pin_order[] = {0,2,1,3,4,5};     // ADC pin sampling order remap. First values must be Voltage, last Current.
+
 // Calibration Data Structure, change IRATIO/VRATIO if sensors count is changed.
- const struct	 CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
+const struct	 CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
                                     float        IRATIO[CURRENTCOUNT];
                                     float        VRATIO[VOLTSCOUNT];
                                     unsigned int MC, DPC;
@@ -101,7 +107,7 @@
                                  };
                                  
                                  
-struct  AccVoltageDataStructure  	{ signed long U2; };
+struct  AccVoltageDataStructure  	{ signed long U2, PERIOD; };
 struct  AccPowerDataStructure    	{ signed long P, I2;};
 struct  TotVoltageDataStructure     { unsigned long U2, cHZ; };
 struct  TotPowerDataStructure       { signed long P, I2;};
@@ -154,7 +160,7 @@ class EmonLibPro
 
 
 		// ISR vars
-		static	uint8_t   		         AdcId;              // ADC PIN number of sensor measured
+		static	uint8_t   		         AdcId;                 // ADC PIN number of sensor measured
 		static	boolean                  FlagPllUpdated;		// Flags that PLL was updated
 		static	SampleStructure   		 Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
 		static	uint8_t                  SamplePerAcc;               // ---Samples counter, Number of samples ajusted/detected by soft pll for each AC cycle
