@@ -38,10 +38,10 @@ extern "C" {
 // Global Variables
 //////////////////////////////////////////////////////////////////////////
 
-boolean                     EmonLibPro::FlagCYCLE_FULL;		// Flags a new cycle.
+boolean                     EmonLibPro::FlagCYCLE_FULL;     // Flags a new cycle.
 boolean                     EmonLibPro::FlagCALC_READY;     // Flags new data ready for calculate
 boolean                     EmonLibPro::FlagINVALID_DATA;   // Flags Invalid data
-uint8_t                     EmonLibPro::pllUnlocked;		// If = 0 pll is locked
+uint8_t                     EmonLibPro::pllUnlocked;        // If = 0 pll is locked
 uint8_t                     EmonLibPro::SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (adjusted/detected by soft pll for each AC cycle)
 TotVoltageDataStructure     EmonLibPro::CycleV[VOLTSCOUNT];    //  |- Cycle Vars
 TotPowerDataStructure       EmonLibPro::CycleP[CURRENTCOUNT];  // -/
@@ -56,9 +56,9 @@ ResultPowerDataStructure    EmonLibPro::ResultP[CURRENTCOUNT]; // -/
 //////////////////////////////////////////////////////////////////////////
 // ISR routine vars
 //////////////////////////////////////////////////////////////////////////
-uint8_t   		            EmonLibPro::AdcId;              // ADC PIN number of sensor measured
-boolean                     EmonLibPro::FlagPllUpdated;		// Flags that PLL was updated
-boolean                     EmonLibPro::FlagOutOfTime;		// Warn ISR routing did not complete before next timer
+uint8_t                     EmonLibPro::AdcId;              // ADC PIN number of sensor measured
+boolean                     EmonLibPro::FlagPllUpdated;     // Flags that PLL was updated
+boolean                     EmonLibPro::FlagOutOfTime;      // Warn ISR routing did not complete before next timer
 
 SampleStructure             EmonLibPro::Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
 
@@ -81,36 +81,36 @@ void EmonLibPro::calculateResult()
   if(SamplesPerCycleTotal!=0) {
         // Process accumulated data as follows:
         //
-        // Active power:	P = (accumulated data) / (number of samples)
-        // Voltage:		U = SQRT [ (accumulated data) / (number of samples) ]
-        // Current:		I = SQRT [ (accumulated data) / (number of samples) ]
-        // Apparent power:	S = U * I
+        // Active power:    P = (accumulated data) / (number of samples)
+        // Voltage:     U = SQRT [ (accumulated data) / (number of samples) ]
+        // Current:     I = SQRT [ (accumulated data) / (number of samples) ]
+        // Apparent power:  S = U * I
         //
   
         byte i;
         for (i=0;i<VOLTSCOUNT;i++){
-		        ResultV[i].U = CalCoeff.VRATIO[i] * (sqrt((float)TotalV[i].U2/SamplesPerCycleTotal)); //Vrms
-		        //ResultV[i].HZ = SAMPLESPSEC * (float)SamplesPerTotal / (float)SamplesPerCycleTotal ;
+                ResultV[i].U = CalCoeff.VRATIO[i] * (sqrt((float)TotalV[i].U2/SamplesPerCycleTotal)); //Vrms
+                //ResultV[i].HZ = SAMPLESPSEC * (float)SamplesPerTotal / (float)SamplesPerCycleTotal ;
                 ResultV[i].HZ = TotalV[i].cHZ / (float)CyclesPerTotal / 100;
-		        TotalV[i].U2=0;
+                TotalV[i].U2=0;
                 TotalV[i].cHZ=0;
         }
 
         for (i=0;i<CURRENTCOUNT;i++){
-		        //I
-		        ResultP[i].I = CalCoeff.IRATIO[i] * (sqrt((float)TotalP[i].I2/SamplesPerCycleTotal)); // Irms
-		        //P
+                //I
+                ResultP[i].I = CalCoeff.IRATIO[i] * (sqrt((float)TotalP[i].I2/SamplesPerCycleTotal)); // Irms
+                //P
                 #if CURRENTCOUNT == VOLTSCOUNT
-		        ResultP[i].P = (CalCoeff.IRATIO[i] * CalCoeff.VRATIO[i]) * ((float)TotalP[i].P/SamplesPerCycleTotal); // Active power (RealPower)
+                ResultP[i].P = (CalCoeff.IRATIO[i] * CalCoeff.VRATIO[i]) * ((float)TotalP[i].P/SamplesPerCycleTotal); // Active power (RealPower)
                 ResultP[i].S = ResultV[i].U * ResultP[i].I; // Apparent power
                 #else
-		        ResultP[i].P = (CalCoeff.IRATIO[i] * CalCoeff.VRATIO[0]) * ((float)TotalP[i].P/SamplesPerCycleTotal); // Active power (RealPower)
-		        ResultP[i].S = ResultV[0].U * ResultP[i].I; // Apparent power
+                ResultP[i].P = (CalCoeff.IRATIO[i] * CalCoeff.VRATIO[0]) * ((float)TotalP[i].P/SamplesPerCycleTotal); // Active power (RealPower)
+                ResultP[i].S = ResultV[0].U * ResultP[i].I; // Apparent power
                 #endif
                 ResultP[i].F = absolute((float)ResultP[i].P / ResultP[i].S);
-				if (isnan(ResultP[i].F)) ResultP[i].F = 1;	// division by 0 
-		        TotalP[i].I2 = 0;
-		        TotalP[i].P = 0;
+                if (isnan(ResultP[i].F)) ResultP[i].F = 1;  // division by 0 
+                TotalP[i].I2 = 0;
+                TotalP[i].P = 0;
         }
         SamplesPerCycleTotal=0;
         CyclesPerTotal=0;
@@ -148,10 +148,10 @@ void EmonLibPro::begin()
      FlagINVALID_DATA = true;
      pllUnlocked = 0xFF;       //initial number of correct cycles to unlock PLL
      
-	 DIDR0   = 0b00111111;     // ADC5D...ADC0D: Digital Input Disable, saves power
+     DIDR0   = 0b00111111;     // ADC5D...ADC0D: Digital Input Disable, saves power
      
-	 cli();
-	 //set timer 1 interrupt for required period
+     cli();
+     //set timer 1 interrupt for required period
      TCCR1A = 0; // clear control registers
      TCCR1B = 0;
      TCNT1  = 0; // clear counter
@@ -164,12 +164,12 @@ void EmonLibPro::begin()
      ADCSRA = adc_sra;         // Sets ADC interrupt and prescaller
      
      #ifdef ARDUINO_HI_RES
-		 //TIMSK0 &= ~(1UL<<TOIE0);  // Disable Timer0 !!! Arduino delay() is now not available
-		 OCR1B  = TIMERTOP - 25;   // Output Compare Register 1B for timer period (SLEEP)
-		 TIMSK1 |= (1UL<<OCIE1B);  // enable timer 1B compare interrupt
-		 SMCR = 0b00000001;              // SLEEP: idle sleep mode
-		 //SMCR = 0b00000011;              // SLEEP: ADC noise reduction, returns to adc int
-		 //SMCR = 0b00000111;              // SLEEP: power save
+         //TIMSK0 &= ~(1UL<<TOIE0);  // Disable Timer0 !!! Arduino delay() is now not available
+         OCR1B  = TIMERTOP - 25;   // Output Compare Register 1B for timer period (SLEEP)
+         TIMSK1 |= (1UL<<OCIE1B);  // enable timer 1B compare interrupt
+         SMCR = 0b00000001;              // SLEEP: idle sleep mode
+         //SMCR = 0b00000011;              // SLEEP: ADC noise reduction, returns to adc int
+         //SMCR = 0b00000111;              // SLEEP: power save
      #endif
      
      sei(); //Enable interrupts
@@ -195,13 +195,13 @@ ISR(TIMER1_COMPA_vect) {
         Serial.println("$");         // Alarm that previous ADC processing has run out of time before timer event.
     }
 
-	// Bellow is a hack to force Arduino Timer0 overflow to occours only when wont disrupt our calculations
-	if (TIFR0 & _BV(TOV0)) {
+    // Bellow is a hack to force Arduino Timer0 overflow to occours only when wont disrupt our calculations
+    if (TIFR0 & _BV(TOV0)) {
         TCNT0=0;
-		TIMSK0 |= 1 << TOIE0; 	 // Sets Overflow Interrupt Enable
-	} else {
-		TIMSK0 &= ~(1 << TOIE0); // Clear Overflow Interrupt Enable
-	}
+        TIMSK0 |= 1 << TOIE0;    // Sets Overflow Interrupt Enable
+    } else {
+        TIMSK0 &= ~(1 << TOIE0); // Clear Overflow Interrupt Enable
+    }
 }
 
 
@@ -209,9 +209,9 @@ ISR(TIMER1_COMPA_vect) {
 // Put the MCU to sleep JUST before the CompA ISR goes off
 ISR(TIMER1_COMPB_vect, ISR_NAKED)
 {
-	__asm volatile ("sei"); 
-	__asm volatile ("sleep"); // go to sleep 
-	__asm volatile ("reti"); 
+    __asm volatile ("sei"); 
+    __asm volatile ("sleep"); // go to sleep 
+    __asm volatile ("reti"); 
 }
 #endif
 
@@ -240,7 +240,7 @@ ISR(ADC_vect) {
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered;
     
     
-    //	y[n] = 0.996*y[n-1] + 0.996*x[n] - 0.996*x[n-1]
+    //  y[n] = 0.996*y[n-1] + 0.996*x[n] - 0.996*x[n-1]
     
     EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = 
                 0.996 * (EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered + 
@@ -280,7 +280,7 @@ ISR(ADC_vect) {
     // ## 3 - Apply phase calibration. Due to multiplexing, there will be a delay
     // between subsequent data channels, as follows:
     //
-    // 	Delay = [ 360 degrees * f(mains) ] / [ 3 * f(sampling) ]
+    //  Delay = [ 360 degrees * f(mains) ] / [ 3 * f(sampling) ]
     //
     // At 2400Hz sampling rate, this means that fresh samples from ADC0
     // and ADC1, for example, will actually have a time difference of
@@ -290,7 +290,7 @@ ISR(ADC_vect) {
     // of additional phase lag. Phase distortions are calibrated using
     // linear interpolation, as follows:
     //
-    //	Calibrated = x[n-1] + CalibCoefficient * ( x[n] - x[n-1] )
+    //  Calibrated = x[n-1] + CalibCoefficient * ( x[n] - x[n-1] )
     //
     // Note that linear interpolation is the same as a fixed time delay.
     // This means that higher frequency components will not be adjusted
@@ -329,7 +329,7 @@ ISR(ADC_vect) {
 
     //## 5 - Saves timer val to calc freq later
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousTimerVal = EmonLibPro::Sample[EmonLibPro::AdcId].TimerVal;
-	EmonLibPro::Sample[EmonLibPro::AdcId].TimerVal = timerVal;    
+    EmonLibPro::Sample[EmonLibPro::AdcId].TimerVal = timerVal;    
 
 
     // Save measurement data for voltage, current and active power on all
@@ -339,20 +339,20 @@ ISR(ADC_vect) {
     //
     // Range check:
     //
-    // 	Filtered data:		Filtered  Range=[FFFE0280...0001FD80]
-    // 	Prescaled data (>>5):	TempX	  Range=[FFFFF014...00000FEC]
-    // 	Multiplication result:	(n/a)	  Range=[FF027E70...00FD8190]
+    //  Filtered data:      Filtered  Range=[FFFE0280...0001FD80]
+    //  Prescaled data (>>5):   TempX     Range=[FFFFF014...00000FEC]
+    //  Multiplication result:  (n/a)     Range=[FF027E70...00FD8190]
     //
-    // 	Prescaled data (>>6):	TempX	  Range=[FFFFF80A...000007F6]
-    // 	Multiplication result:	(n/a)	  Range=[FFC09F9C...003F6064]
+    //  Prescaled data (>>6):   TempX     Range=[FFFFF80A...000007F6]
+    //  Multiplication result:  (n/a)     Range=[FFC09F9C...003F6064]
     //
     // Assuming that sampled data is stuck at full-scale (which it can't
     // be, since the high-pass filter would bias such a signal to zero),
     // then for accumulation purposes the maximum number of samples that
     // can be integrated is:
     //
-    // 	MaxSamples(presc=32) = 7FFFFFFFh / 00FD8190h = 0081h = 129d
-    // 	MaxSamples(presc=64) = 7FFFFFFFh / 003F6064h = 0205h = 517d
+    //  MaxSamples(presc=32) = 7FFFFFFFh / 00FD8190h = 0081h = 129d
+    //  MaxSamples(presc=64) = 7FFFFFFFh / 003F6064h = 0205h = 517d
     //
     // Note: Index=0 -> ADC0, Index=1 -> ADC1, Index=2 -> ADC2
     EmonLibPro::Temp[EmonLibPro::AdcId]=EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated;//>>6;
@@ -375,7 +375,7 @@ ISR(ADC_vect) {
     
     }
 
-	
+    
 
     // Last sensor reading
     if (EmonLibPro::AdcId == VOLTSCOUNT + CURRENTCOUNT - 1)
@@ -423,7 +423,7 @@ ISR(ADC_vect) {
                 EmonLibPro::CycleV[i].cHZ = (unsigned long)(F_CPU*100) / (EmonLibPro::AccumulatorV[i].PERIOD );
                 EmonLibPro::TotalV[i].cHZ+=EmonLibPro::CycleV[i].cHZ;
                 EmonLibPro::AccumulatorV[i].U2 = 0;
-				EmonLibPro::AccumulatorV[i].PERIOD  = 0;
+                EmonLibPro::AccumulatorV[i].PERIOD  = 0;
             }
             for (i=0;i<CURRENTCOUNT;i++){
                 EmonLibPro::CycleP[i].I2 = EmonLibPro::AccumulatorP[i].I2;
