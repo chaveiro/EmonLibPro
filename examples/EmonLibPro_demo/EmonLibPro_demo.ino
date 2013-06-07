@@ -41,9 +41,6 @@
 
     Author: Nuno Chaveiro  nchaveiro[at]gmail.com  Lisbon, Portugal
     
-    History:
-    1.0 - 25-05-2013 - First public release.
-    1.1 - 07-06-2013 - Speed up IRS routine a little.
 
 */
 
