@@ -42,7 +42,7 @@ boolean                     EmonLibPro::FlagCYCLE_FULL;		// Flags a new cycle.
 boolean                     EmonLibPro::FlagCALC_READY;     // Flags new data ready for calculate
 boolean                     EmonLibPro::FlagINVALID_DATA;   // Flags Invalid data
 uint8_t                     EmonLibPro::pllUnlocked;		// If = 0 pll is locked
-uint8_t                     EmonLibPro::SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure
+uint8_t                     EmonLibPro::SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (adjusted/detected by soft pll for each AC cycle)
 TotVoltageDataStructure     EmonLibPro::CycleV[VOLTSCOUNT];    //  |- Cycle Vars
 TotPowerDataStructure       EmonLibPro::CycleP[CURRENTCOUNT];  // -/
 unsigned long               EmonLibPro::SamplesPerCycleTotal;  // --- Number of cycles added for all sums of Total Var.
@@ -62,8 +62,7 @@ boolean                     EmonLibPro::FlagOutOfTime;		// Warn ISR routing did 
 
 SampleStructure             EmonLibPro::Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
 
-uint8_t                     EmonLibPro::SamplePerAcc;               // ---Samples counter, Number of samples ajusted/detected by soft pll for each AC cycle
-AccVoltageDataStructure     EmonLibPro::AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
+AccVoltageDataStructure     EmonLibPro::AccumulatorV[VOLTSCOUNT];   // --- Sum of all samples (copyed to cycle var at end of cycle)
 AccPowerDataStructure       EmonLibPro::AccumulatorP[CURRENTCOUNT]; // -/
 
 signed long                 EmonLibPro::Temp[VOLTSCOUNT + CURRENTCOUNT];     // Internal Aux vars
@@ -76,43 +75,10 @@ signed long                 EmonLibPro::Temp[VOLTSCOUNT + CURRENTCOUNT];     // 
 // Constructor
 EmonLibPro::EmonLibPro(void) { }
 
-
-// Call this one time
-void EmonLibPro::begin()
-{
-     // If a lower resolution than 10 bits is needed, the input clock frequency to the ADC can be higher than 200kHz to get a higher sample rate.
-     ADCSRA &= 0b11111000;     // remove bits set by Arduino library
-     //ADCSRA |= 0b00000110;   // change ADC prescaler to /64 = 250kHz clock (less precision)
-     ADCSRA |= 0b00000111;     // change ADC prescaler to /128 = 125kHz clock
-     DIDR0   = 0b00111111;     // ADC5D...ADC0D: Digital Input Disable, saves power
-     
-     FlagOutOfTime = false;
-     FlagPllUpdated = false;
-     FlagCALC_READY = false;
-     FlagINVALID_DATA = true;
-     pllUnlocked = 0xFF;       //initial number of correct cycles to unlock PLL
-     
-     //set timer 1 interrupt for required period
-     cli();
-     TCCR1A = 0; // clear control registers
-     TCCR1B = 0;
-     TCNT1  = 0; // clear counter
-     OCR1A  = TIMERTOP -1;      // Output Compare Register 1A for timer period
-     //OCR1B  = TIMERTOP - 21; // Output Compare Register 1B for timer period (SLEEP)
-
-     TCCR1B |= (1UL<<WGM12);   // CTC mode
-     TCCR1B |= (1UL<<CS10);    // clkIO/1 (No prescaling)
-     TIMSK1 |= (1UL<<OCIE1A);  // enable timer 1A compare interrupt
-     //TIMSK1 |= (1UL<<OCIE1B);  // enable timer 1B compare interrupt
-     ADCSRA |= (1UL<<ADIE);    // enable ADC interrupt
-     sei(); //Enable interrupts
-}
-
-
 // calculate voltage, current, power and frequency
 void EmonLibPro::calculateResult()
 {
-  if(SamplesPerCycle!=0) {
+  if(SamplesPerCycleTotal!=0) {
         // Process accumulated data as follows:
         //
         // Active power:	P = (accumulated data) / (number of samples)
@@ -121,7 +87,7 @@ void EmonLibPro::calculateResult()
         // Apparent power:	S = U * I
         //
   
-        volatile byte i;
+        byte i;
         for (i=0;i<VOLTSCOUNT;i++){
 		        ResultV[i].U = CalCoeff.VRATIO[i] * (sqrt((float)TotalV[i].U2/SamplesPerCycleTotal)); //Vrms
 		        //ResultV[i].HZ = SAMPLESPSEC * (float)SamplesPerTotal / (float)SamplesPerCycleTotal ;
@@ -148,12 +114,12 @@ void EmonLibPro::calculateResult()
         }
         SamplesPerCycleTotal=0;
         CyclesPerTotal=0;
-
     
   } else {
         EmonLibPro::FlagINVALID_DATA = true;
         // Clean results, we have invalid data.
-        volatile byte i;
+        EmonLibPro::SamplesPerCycle=0;
+        byte i;
         for (i=0;i<VOLTSCOUNT;i++){
             EmonLibPro::CycleV[i].U2 = 0;
             EmonLibPro::CycleV[i].cHZ = 0;
@@ -173,6 +139,43 @@ void EmonLibPro::calculateResult()
 }
 
 
+// Call this one time
+void EmonLibPro::begin()
+{
+     FlagOutOfTime = false;
+     FlagPllUpdated = false;
+     FlagCALC_READY = false;
+     FlagINVALID_DATA = true;
+     pllUnlocked = 0xFF;       //initial number of correct cycles to unlock PLL
+     
+	 DIDR0   = 0b00111111;     // ADC5D...ADC0D: Digital Input Disable, saves power
+     
+	 cli();
+	 //set timer 1 interrupt for required period
+     TCCR1A = 0; // clear control registers
+     TCCR1B = 0;
+     TCNT1  = 0; // clear counter
+     OCR1A  = TIMERTOP - 1;      // Output Compare Register 1A for timer period
+
+     TCCR1B |= (1UL<<WGM12);   // CTC mode
+     TCCR1B |= (1UL<<CS10);    // clkIO/1 (No prescaling)
+     TIMSK1 |= (1UL<<OCIE1A);  // enable timer 1A compare interrupt
+
+     ADCSRA = adc_sra;         // Sets ADC interrupt and prescaller
+     
+     #ifdef ARDUINO_HI_RES
+		 //TIMSK0 &= ~(1UL<<TOIE0);  // Disable Timer0 !!! Arduino delay() is now not available
+		 OCR1B  = TIMERTOP - 25;   // Output Compare Register 1B for timer period (SLEEP)
+		 TIMSK1 |= (1UL<<OCIE1B);  // enable timer 1B compare interrupt
+		 SMCR = 0b00000001;              // SLEEP: idle sleep mode
+		 //SMCR = 0b00000011;              // SLEEP: ADC noise reduction, returns to adc int
+		 //SMCR = 0b00000111;              // SLEEP: power save
+     #endif
+     
+     sei(); //Enable interrupts
+}
+
+
 //////////////////////////////////////////////////////////////////////////
 // INTERRUPT Routines
 //////////////////////////////////////////////////////////////////////////
@@ -180,37 +183,50 @@ void EmonLibPro::calculateResult()
 // Timer 1 interrupt handler
 ISR(TIMER1_COMPA_vect) {
     ADMUX   = _BV(REFS0) | adc_pin_order[0]; // [AVCC with external capacitor at AREF pin] | [PIN=ADC0]
-    ADCSRA |= _BV(ADSC);      // Start ADC conversion
+    ADCSRA = adc_sra | _BV(ADSC);            // Start ADC conversion
     EmonLibPro::AdcId=0;
-    if (EmonLibPro::FlagOutOfTime) {
-        Serial.println("$");  // Alarm that previous ADC processing has run out of time before timer event. Reduce sampling rate!
+    EmonLibPro::SamplesPerCycle++;
+    if (EmonLibPro::SamplesPerCycle >= 200 && !EmonLibPro::FlagINVALID_DATA) { // Clean data when no zero cross detected.
+        EmonLibPro::SamplesPerCycle=0;
+        EmonLibPro::SamplesPerCycleTotal=0;
+        EmonLibPro::FlagCALC_READY = true;
     }
-    if (EmonLibPro::SamplePerAcc > 250 && !EmonLibPro::FlagINVALID_DATA) { // Clean data when no zero cross detected.
-            EmonLibPro::SamplesPerCycle=0;
-            EmonLibPro::FlagCALC_READY = true;
+    if (EmonLibPro::FlagOutOfTime) { // This should never be true.  Reduce sampling rate if it is!
+        Serial.println("$");         // Alarm that previous ADC processing has run out of time before timer event.
     }
+
+	// Bellow is a hack to force Arduino Timer0 overflow to occours only when wont disrupt our calculations
+	if (TIFR0 & _BV(TOV0)) {
+        TCNT0=0;
+		TIMSK0 |= 1 << TOIE0; 	 // Sets Overflow Interrupt Enable
+	} else {
+		TIMSK0 &= ~(1 << TOIE0); // Clear Overflow Interrupt Enable
+	}
 }
 
-// put the MCU to sleep JUST before the CompA ISR goes off
-/*ISR(TIMER1_COMPB_vect, ISR_NAKED)
+
+#ifdef ARDUINO_HI_RES
+// Put the MCU to sleep JUST before the CompA ISR goes off
+ISR(TIMER1_COMPB_vect, ISR_NAKED)
 {
 	__asm volatile ("sei"); 
 	__asm volatile ("sleep"); // go to sleep 
 	__asm volatile ("reti"); 
 }
-*/
+#endif
+
 
 // ADC interrupt handler
 ISR(ADC_vect) {
-    volatile unsigned int timerVal = TCNT1;    // Saves timer counter for freq measurement
-    volatile signed long  TempI;
-    volatile signed long TempL;
-    volatile byte i;
-    
+    unsigned int timerVal = TCNT1;    // Saves timer counter for freq measurement
+    signed long  TempI;
+    signed long TempL;
+    uint8_t i;
+
     // Maintain multiplexing of input channels
     if (EmonLibPro::AdcId < VOLTSCOUNT + CURRENTCOUNT - 1) {
         ADMUX = _BV(REFS0) | adc_pin_order[(EmonLibPro::AdcId + 1)];   // Select next ADC
-        ADCSRA |= _BV(ADSC);                            // Start conversion
+        ADCSRA = adc_sra | _BV(ADSC);      // Start ADC conversion
     } 
 
     // ## 1 - Saves Previous read
@@ -345,6 +361,8 @@ ISR(ADC_vect) {
     {
         EmonLibPro::AccumulatorV[EmonLibPro::AdcId].U2 += (EmonLibPro::Temp[EmonLibPro::AdcId]*EmonLibPro::Temp[EmonLibPro::AdcId]);
         EmonLibPro::AccumulatorV[EmonLibPro::AdcId].PERIOD += (TIMERTOP + (unsigned int) EmonLibPro::Sample[EmonLibPro::AdcId].PreviousTimerVal) - (unsigned int)timerVal;
+
+
     }
     else
     {
@@ -369,16 +387,13 @@ ISR(ADC_vect) {
             // One New CYCLE Starts
             EmonLibPro::Sample[0].FlagZeroDetec=false;
             EmonLibPro::FlagCYCLE_FULL=true;
-
-            EmonLibPro::SamplesPerCycle=EmonLibPro::SamplePerAcc / (VOLTSCOUNT + CURRENTCOUNT) ;    //Samples per cycle per sensor
-            EmonLibPro::SamplePerAcc = 0;
             
             // ### PLL processing ###
             // The idea is to adjust timer to get a close to 0VAC read on the first measure of the next cycle.
             // Without PLL max resolution is 1/SAMPLESPSEC (0.83 ms for 1200samples/s)
             
             TCNT1 = TCNT1 + ((unsigned int)EmonLibPro::Sample[0].Calibrated * (double)(PLLTIMERDELAYCOEF));
-            if((unsigned int)(EmonLibPro::Sample[0].Calibrated) > (512/EmonLibPro::SamplesPerCycle)) { //sample > min temporal resolution /2
+            if((unsigned int)(EmonLibPro::Sample[0].Calibrated) > (CalCoeff.VRATIO[0] * 512/32)) { //min temporal resolution 
                 EmonLibPro::FlagPllUpdated=true;
                 EmonLibPro::pllUnlocked=EmonLibPro::SamplesPerCycle; // we're unlocked
             } else {
@@ -420,6 +435,7 @@ ISR(ADC_vect) {
             }
             
             EmonLibPro::SamplesPerCycleTotal+=(EmonLibPro::SamplesPerCycle);
+            EmonLibPro::SamplesPerCycle=0;
             EmonLibPro::CyclesPerTotal++;          // for average frequency calculation
             //EmonLibPro::FlagCYCLE_FULL=false;
             if (EmonLibPro::CyclesPerTotal >= CALCULATESAMPLES) {
@@ -430,9 +446,7 @@ ISR(ADC_vect) {
         }
 
     }
-	
-	
-    EmonLibPro::SamplePerAcc++;	        // Sample sensor data counter increment
+
     EmonLibPro::AdcId++;                // ADC index increment
     EmonLibPro::FlagOutOfTime = (TIFR1 & (1 << OCF1A));  // If timer counter is set we already missed a timer event. Signal this.
 }
