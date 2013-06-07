@@ -43,6 +43,7 @@
     
     History:
     1.0 - 25-05-2013 - First public release.
+    1.1 - 07-06-2013 - Speed up IRS routine a little.
 
 */
 
@@ -60,7 +61,7 @@ EmonLibPro  Emon ;
 
 void setup()
 {
-  //Serial.begin(250000);
+  //Serial.begin(230400);
   Serial.begin(9600);
   Serial.println("Ready");
 
@@ -112,33 +113,33 @@ void printCycle(byte i)
   Serial.print("Cycle");
     Serial.print(i);
     Serial.print(": ");
-	Serial.print(Emon.CycleV[i].U2);
-	Serial.print(" ");
-	Serial.print(Emon.CycleV[i].cHZ);
-	Serial.print(" ");
-	Serial.print(Emon.CycleP[i].I2);
-	Serial.print(" ");
-	Serial.print(Emon.CycleP[i].P);
+    Serial.print(Emon.CycleV[i].U2);
+    Serial.print(" ");
+    Serial.print(Emon.CycleV[i].cHZ);
+    Serial.print(" ");
+    Serial.print(Emon.CycleP[i].I2);
+    Serial.print(" ");
+    Serial.print(Emon.CycleP[i].P);
     if(!Emon.pllUnlocked) Serial.print(" L");    
-	Serial.println("\t");
+    Serial.println("\t");
 }    
 
 void printResults(byte i)
 {
-	Serial.print("Result");
+    Serial.print("Result");
     Serial.print(i);
     Serial.print(": ");
-	Serial.print(Emon.ResultV[0].U);
-	Serial.print("VAC\t");
-	Serial.print(Emon.ResultV[0].HZ);
-	Serial.print("Hz\t");
-	Serial.print(Emon.ResultP[i].I);
-	Serial.print("A\t");
-	Serial.print(Emon.ResultP[i].P);
-	Serial.print("W\t");
-	Serial.print(Emon.ResultP[i].S);
-	Serial.print("VA\t");
-	Serial.print(Emon.ResultP[i].F);
+    Serial.print(Emon.ResultV[0].U);
+    Serial.print("VAC\t");
+    Serial.print(Emon.ResultV[0].HZ);
+    Serial.print("Hz\t");
+    Serial.print(Emon.ResultP[i].I);
+    Serial.print("A\t");
+    Serial.print(Emon.ResultP[i].P);
+    Serial.print("W\t");
+    Serial.print(Emon.ResultP[i].S);
+    Serial.print("VA\t");
+    Serial.print(Emon.ResultP[i].F);
     Serial.println("Pfact");
 }
 
@@ -150,8 +151,8 @@ void printStatus()
   } else {
       Serial.println("PLL: Locked");
   } 
-  Serial.print("Samples per Cycle: ");
-  Serial.println(Emon.SamplesPerCycle);
+  Serial.print("ADC samples per Cycle: ");
+  Serial.println((Emon.SamplesPerCycleTotal/Emon.CyclesPerTotal) * (VOLTSCOUNT + CURRENTCOUNT));
   Serial.print("VOLTSCOUNT: ");
   Serial.println(VOLTSCOUNT);
   Serial.print("CURRENTCOUNT: ");
