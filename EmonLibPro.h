@@ -39,7 +39,7 @@
 
 // User configurable Section 
 
-#define VOLTSCOUNT 1	    // Number of V sensors installed, can be 1 or CURRENTCOUNT number of voltage sensors
+#define VOLTSCOUNT 1        // Number of V sensors installed, can be 1 or CURRENTCOUNT number of voltage sensors
 #define CURRENTCOUNT 2      // Number of CT sensors installed.
 
 #define V1CAL 245.23        // calculated value is 243:10.9 for transformer x 11:1 for resistor divider = 122.61
@@ -47,10 +47,10 @@
 #define I2CAL 10            // this is for CT2
 //#define I3CAL 10          // this is for CT3
 
-//#define SAMPLESPSEC	900	  // Samples per second 
-//#define SAMPLESPSEC	1000  // Samples per second 
-//#define SAMPLESPSEC	1250  // Samples per second (50Hz ok) (one sample unit includes all sensors)
-//#define SAMPLESPSEC	1600      // Samples per second (50Hz ok) (one sample unit includes all sensors)
+//#define SAMPLESPSEC   900   // Samples per second 
+//#define SAMPLESPSEC   1000  // Samples per second 
+//#define SAMPLESPSEC   1250  // Samples per second (50Hz ok) (one sample unit includes all sensors)
+//#define SAMPLESPSEC   1600      // Samples per second (50Hz ok) (one sample unit includes all sensors)
 #define SAMPLESPSEC   2000  // Samples per second (50Hz ok) (one sample unit includes all sensors)
 //#define SAMPLESPSEC   2500  // Samples per second (50Hz ok) (one sample unit includes all sensors)
 
@@ -60,7 +60,7 @@
 
 
 // Does not work, first adc read after sleep is garbage.
-#undef ARDUINO_HI_RES	      // Uncomment this line to optimize lib for hi precision on Timer1 with sleep trick.
+#undef ARDUINO_HI_RES         // Uncomment this line to optimize lib for hi precision on Timer1 with sleep trick.
 
 // Don't modify below this line
 //--------------------------------------------------------------------------------------------------
@@ -97,7 +97,7 @@ const byte adc_sra = (1UL<<ADEN) |          // ADC Enable
 const byte adc_pin_order[] = {0,2,1,3,4,5};     // ADC pin sampling order remap. First values must be Voltage, last Current.
 
 // Calibration Data Structure, change IRATIO/VRATIO if sensors count is changed.
-const struct	 CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
+const struct     CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
                                     float        IRATIO[CURRENTCOUNT];
                                     float        VRATIO[VOLTSCOUNT];
                                     unsigned int MC, DPC;
@@ -106,7 +106,7 @@ const struct	 CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
                                         24576,
                                         49152,
                                         //73728
-                                    },		
+                                    },      
                                     {   (I1CAL * SUPPLY_VOLTS)/1024,      // current gain - must set a line for each I sensor
                                         (I2CAL * SUPPLY_VOLTS)/1024,
                                         //(I3CAL * SUPPLY_VOLTS)/1024
@@ -118,16 +118,16 @@ const struct	 CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
                                  };
                                  
                                  
-struct  AccVoltageDataStructure  	{ signed long U2, PERIOD; };
-struct  AccPowerDataStructure    	{ signed long P, I2;};
+struct  AccVoltageDataStructure     { signed long U2, PERIOD; };
+struct  AccPowerDataStructure       { signed long P, I2;};
 struct  TotVoltageDataStructure     { unsigned long U2, cHZ; };
 struct  TotPowerDataStructure       { signed long P, I2;};
-struct	ResultVoltageDataStructure  { float U,HZ; };
-struct	ResultPowerDataStructure    { float I,P,S,F; };
+struct  ResultVoltageDataStructure  { float U,HZ; };
+struct  ResultPowerDataStructure    { float I,P,S,F; };
 
 /*
-extern TotVoltageDataStructure      CycleV[VOLTSCOUNT];	    //  |- Cycle Vars
-extern TotPowerDataStructure        CycleP[CURRENTCOUNT];	// -
+extern TotVoltageDataStructure      CycleV[VOLTSCOUNT];     //  |- Cycle Vars
+extern TotPowerDataStructure        CycleP[CURRENTCOUNT];   // -
 extern TotVoltageDataStructure      TotalV[VOLTSCOUNT];
 extern TotPowerDataStructure        TotalP[CURRENTCOUNT];
 extern ResultVoltageDataStructure   ResultV[VOLTSCOUNT];
@@ -143,42 +143,42 @@ struct  SampleStructure     {      boolean FlagZeroDetec, WaitNextCross;
                                 unsigned int TimerVal, PreviousTimerVal;
                             };
 /*                                    
-extern	SampleStructure   			Sample[VOLTSCOUNT + CURRENTCOUNT];
+extern  SampleStructure             Sample[VOLTSCOUNT + CURRENTCOUNT];
 */
 
 class EmonLibPro
 {
-	public:
-	    EmonLibPro(void);       //Constructor
+    public:
+        EmonLibPro(void);       //Constructor
         void begin();
         void addCycle();
-		void calculateResult();
-		
-		static	boolean         FlagCYCLE_FULL;		// Flags a new cycle.
+        void calculateResult();
+        
+        static  boolean         FlagCYCLE_FULL;     // Flags a new cycle.
         static  boolean         FlagCALC_READY;     // Flags new data to calculate
         static  boolean         FlagINVALID_DATA;   // Flags Invalid data
-		static	boolean         FlagOutOfTime;		// Warn ISR routing did not complete before next timer
-		static	uint8_t         pllUnlocked;		// If = 0 pll is locked
-		static	uint8_t                     SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (ajusted/detected by soft pll for each AC cycle)
-        static	TotVoltageDataStructure     CycleV[VOLTSCOUNT];	   //  |- Cycle Vars
-		static	TotPowerDataStructure       CycleP[CURRENTCOUNT];  // /
+        static  boolean         FlagOutOfTime;      // Warn ISR routing did not complete before next timer
+        static  uint8_t         pllUnlocked;        // If = 0 pll is locked
+        static  uint8_t                     SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (ajusted/detected by soft pll for each AC cycle)
+        static  TotVoltageDataStructure     CycleV[VOLTSCOUNT];    //  |- Cycle Vars
+        static  TotPowerDataStructure       CycleP[CURRENTCOUNT];  // /
         static  unsigned long               SamplesPerCycleTotal;  // --- Number of cycles added for all sums of Total Var.
         static  unsigned int                CyclesPerTotal;        // --- Number of sums on Total var.
-		static	TotVoltageDataStructure     TotalV[VOLTSCOUNT];    //  |- Total Vars (Sum of cycles until calculation)
-		static	TotPowerDataStructure       TotalP[CURRENTCOUNT];  // -/
-        static	ResultVoltageDataStructure  ResultV[VOLTSCOUNT];   // -\_ Result is here!
-		static	ResultPowerDataStructure    ResultP[CURRENTCOUNT]; // -/
+        static  TotVoltageDataStructure     TotalV[VOLTSCOUNT];    //  |- Total Vars (Sum of cycles until calculation)
+        static  TotPowerDataStructure       TotalP[CURRENTCOUNT];  // -/
+        static  ResultVoltageDataStructure  ResultV[VOLTSCOUNT];   // -\_ Result is here!
+        static  ResultPowerDataStructure    ResultP[CURRENTCOUNT]; // -/
 
 
-		// ISR vars
-		static	uint8_t   		         AdcId;                 // ADC PIN number of sensor measured
-		static	boolean                  FlagPllUpdated;		// Flags that PLL was updated
-		static	SampleStructure   		 Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
-        static	AccVoltageDataStructure  AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
-		static	AccPowerDataStructure    AccumulatorP[CURRENTCOUNT]; // -/
-		static	signed long              Temp[VOLTSCOUNT + CURRENTCOUNT];    // Internal Aux var
-		
-	private:
+        // ISR vars
+        static  uint8_t                  AdcId;                      // ADC PIN number of sensor measured
+        static  boolean                  FlagPllUpdated;             // Flags that PLL was updated
+        static  SampleStructure          Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
+        static  AccVoltageDataStructure  AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
+        static  AccPowerDataStructure    AccumulatorP[CURRENTCOUNT]; // -/
+        static  signed long              Temp[VOLTSCOUNT + CURRENTCOUNT];    // Internal Aux var
+        
+    private:
 };
 
 //extern EmonLibPro EmonLib;
