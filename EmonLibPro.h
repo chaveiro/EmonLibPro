@@ -50,8 +50,8 @@
 //#define SAMPLESPSEC	900	  // Samples per second 
 //#define SAMPLESPSEC	1000  // Samples per second 
 //#define SAMPLESPSEC	1250  // Samples per second (50Hz ok) (one sample unit includes all sensors)
-#define SAMPLESPSEC	1600      // Samples per second (50Hz ok) (one sample unit includes all sensors)
-//#define SAMPLESPSEC   2000  // Samples per second (50Hz ok) (one sample unit includes all sensors)
+//#define SAMPLESPSEC	1600      // Samples per second (50Hz ok) (one sample unit includes all sensors)
+#define SAMPLESPSEC   2000  // Samples per second (50Hz ok) (one sample unit includes all sensors)
 //#define SAMPLESPSEC   2500  // Samples per second (50Hz ok) (one sample unit includes all sensors)
 
 #define CALCULATESAMPLES 50 * 2 // Number of cycles to activate FlagCALC_READY
@@ -59,12 +59,23 @@
 #define SUPPLY_VOLTS 4.95     // used here because it's more accurate than the internal band-gap reference
 
 
+// Does not work, first adc read after sleep is garbage.
+#undef ARDUINO_HI_RES	      // Uncomment this line to optimize lib for hi precision on Timer1 with sleep trick.
+
 // Don't modify below this line
 //--------------------------------------------------------------------------------------------------
 // constants calculated at compile time
 #define TIMERTOP F_CPU/SAMPLESPSEC          // Sampling timer
 #define PLLTIMERDELAYCOEF TIMERTOP/V1CAL    // PLL delay coefficient
 
+// If a lower resolution than 10 bits is needed, the input clock frequency to the ADC can be higher than 200kHz to get a higher sample rate.
+const byte adc_sra = (1UL<<ADEN) |          // ADC Enable
+                     (1UL<<ADIF) |          // ADC Interrupt Flag
+                     (1UL<<ADIE) |          // ADC Interrupt Enable
+                     (1UL<<ADPS2) |         // --- ADC Prescaler Select Bits /128 = 125kHz clock
+                     (1UL<<ADPS1) |         //  |
+                     (1UL<<ADPS0);          // -- comment this line to change ADC prescaler to /64 = 250kHz clock (less precision)
+                     
 //--------------------------------------------------------------------------------------------------
 // Checks at compile time
 #if !((SAMPLESPSEC % 50 == 0) && (F_CPU % SAMPLESPSEC == 0))
@@ -148,7 +159,7 @@ class EmonLibPro
         static  boolean         FlagINVALID_DATA;   // Flags Invalid data
 		static	boolean         FlagOutOfTime;		// Warn ISR routing did not complete before next timer
 		static	uint8_t         pllUnlocked;		// If = 0 pll is locked
-		static	uint8_t                     SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure
+		static	uint8_t                     SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (ajusted/detected by soft pll for each AC cycle)
         static	TotVoltageDataStructure     CycleV[VOLTSCOUNT];	   //  |- Cycle Vars
 		static	TotPowerDataStructure       CycleP[CURRENTCOUNT];  // /
         static  unsigned long               SamplesPerCycleTotal;  // --- Number of cycles added for all sums of Total Var.
@@ -163,7 +174,6 @@ class EmonLibPro
 		static	uint8_t   		         AdcId;                 // ADC PIN number of sensor measured
 		static	boolean                  FlagPllUpdated;		// Flags that PLL was updated
 		static	SampleStructure   		 Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
-		static	uint8_t                  SamplePerAcc;               // ---Samples counter, Number of samples ajusted/detected by soft pll for each AC cycle
         static	AccVoltageDataStructure  AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
 		static	AccPowerDataStructure    AccumulatorP[CURRENTCOUNT]; // -/
 		static	signed long              Temp[VOLTSCOUNT + CURRENTCOUNT];    // Internal Aux var
