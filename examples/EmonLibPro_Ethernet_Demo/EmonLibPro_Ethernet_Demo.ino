@@ -51,7 +51,9 @@ IPAddress ip(192,168,1,199);
 EthernetClient client;
 
 // Number of milliseconds to wait without receiving any data before we give up
-const int kNetworkTimeout = 1500;
+const int kNetworkTimeout = 1750;
+// Number of milliseconds to wait if no data is available before trying again
+const int kNetworkDelay = 50;
 
 //--------------------------------------------------------------------------------------------------
 //Emon Vars
@@ -105,8 +107,7 @@ void loop()
   
   if(Emon.FlagCALC_READY && userCommand == 4) {
         Emon.calculateResult();
-        postEth(0);
-        postEth(1);
+        postEth();
   }  
 
 
@@ -222,31 +223,38 @@ void printResults(byte i)
 }
 
 
-void postEth(byte i)
+void postEth()
 {
   Serial.print("ETH: Post...");
 
-  // if you get a connection, report back via serial:
   if (client.connect(server, CMS_PORT)) {
     // Make a HTTP request:
-    //http://emon.server.com/input/bulk.json?data=[[0,1,10,20,30,40,50,60]]
-    client.print("GET /input/bulk.json?apikey=" CMS_APIKEY "&data=[[0," CMS_NODEID_PREFIX);
-    client.print(i);
-    client.print(",");
-    client.print(Emon.ResultV[0].U);
-    client.print(",");
-    client.print(Emon.ResultV[0].HZ);
-    client.print(",");
-    client.print(Emon.ResultP[i].I);
-    client.print(",");
-    client.print(Emon.ResultP[i].P);
-    client.print(",");
-    client.print(Emon.ResultP[i].S);
-    client.print(",");
-    client.print(Emon.ResultP[i].F);
-    client.print(",");
-    client.print(Emon.pllUnlocked);
-    client.print("]]");
+    //http://emon.gtronica.com/input/bulk.json?data=[[0,1,10,20,30,40,50,60]]
+    client.print("GET /input/bulk.json?apikey=" CMS_APIKEY "&data=[");
+    for (i=0;i<CURRENTCOUNT;i++){
+      if (i>0) {
+        client.print(",");
+      }
+      client.print("[0,");
+      client.print(CMS_NODEID_PREFIX);
+      client.print(i);
+      client.print(",");
+      client.print(Emon.ResultV[0].U);
+      client.print(",");
+      client.print(Emon.ResultV[0].HZ);
+      client.print(",");
+      client.print(Emon.ResultP[i].I);
+      client.print(",");
+      client.print(Emon.ResultP[i].P);
+      client.print(",");
+      client.print(Emon.ResultP[i].S);
+      client.print(",");
+      client.print(Emon.ResultP[i].F);
+      client.print(",");
+      client.print(Emon.pllUnlocked);
+      client.print("]");
+    }
+    client.print("]");
     client.println(" HTTP/1.0");
     client.println("Host: " CMS_HOST);
     client.println("User-Agent: EmonLibPro");
@@ -268,12 +276,18 @@ void postEth(byte i)
             //Serial.print(c);
             timeoutStart = millis();  //reset the timeout counter
         }
+        else
+        {
+            // We haven't got any data, so let's pause to allow some to arrive
+            delay(kNetworkDelay);
+        }
     }
   } else {
     Serial.print("Fail");    // didn't get a connection to the server:
   }
   client.stop();
 }
+
 
 void printStatus()
 {
