@@ -229,7 +229,7 @@ void postEth()
 
   if (client.connect(server, CMS_PORT)) {
     // Make a HTTP request:
-    //http://emon.gtronica.com/input/bulk.json?data=[[0,1,10,20,30,40,50,60]]
+    //http://emon.server.com/input/bulk.json?data=[[0,1,10,20,30,40,50,60]]
     client.print("GET /input/bulk.json?apikey=" CMS_APIKEY "&data=[");
     for (i=0;i<CURRENTCOUNT;i++){
       if (i>0) {
