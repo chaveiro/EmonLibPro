@@ -57,7 +57,6 @@ ResultPowerDataStructure    EmonLibPro::ResultP[CURRENTCOUNT]; // -/
 // ISR routine vars
 //////////////////////////////////////////////////////////////////////////
 uint8_t                     EmonLibPro::AdcId;              // ADC PIN number of sensor measured
-boolean                     EmonLibPro::FlagPllUpdated;     // Flags that PLL was updated
 boolean                     EmonLibPro::FlagOutOfTime;      // Warn ISR routing did not complete before next timer
 
 SampleStructure             EmonLibPro::Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
@@ -90,10 +89,9 @@ void EmonLibPro::calculateResult()
         byte i;
         for (i=0;i<VOLTSCOUNT;i++){
                 ResultV[i].U = CalCoeff.VRATIO[i] * (sqrt((float)TotalV[i].U2/SamplesPerCycleTotal)); //Vrms
-                //ResultV[i].HZ = SAMPLESPSEC * (float)SamplesPerTotal / (float)SamplesPerCycleTotal ;
-                ResultV[i].HZ = TotalV[i].cHZ / (float)CyclesPerTotal / 100;
+                ResultV[i].HZ = (float)(F_CPU) / ((TIMERTOP * (uint8_t)(SamplesPerCycleTotal/CyclesPerTotal)) + ((float)TotalV[i].PeriodDiff/CyclesPerTotal) );
                 TotalV[i].U2=0;
-                TotalV[i].cHZ=0;
+    			TotalV[i].PeriodDiff=0;
         }
 
         for (i=0;i<CURRENTCOUNT;i++){
@@ -122,7 +120,7 @@ void EmonLibPro::calculateResult()
         byte i;
         for (i=0;i<VOLTSCOUNT;i++){
             EmonLibPro::CycleV[i].U2 = 0;
-            EmonLibPro::CycleV[i].cHZ = 0;
+            EmonLibPro::CycleV[i].PeriodDiff = 0;
             EmonLibPro::ResultV[i].U = 0;
             EmonLibPro::ResultV[i].HZ = 0;
         }
@@ -143,7 +141,6 @@ void EmonLibPro::calculateResult()
 void EmonLibPro::begin()
 {
      FlagOutOfTime = false;
-     FlagPllUpdated = false;
      FlagCALC_READY = false;
      FlagINVALID_DATA = true;
      pllUnlocked = 0xFF;       //initial number of correct cycles to unlock PLL
@@ -195,7 +192,7 @@ ISR(TIMER1_COMPA_vect) {
         Serial.println("$");         // Alarm that previous ADC processing has run out of time before timer event.
     }
 
-    // Bellow is a hack to force Arduino Timer0 overflow to occours only when wont disrupt our calculations
+    // Bellow is a hack to force Arduino Timer0 overflow to ocours only when wont disrupt our calculations
     if (TIFR0 & _BV(TOV0)) {
         TCNT0=0;
         TIMSK0 |= 1 << TOIE0;    // Sets Overflow Interrupt Enable
@@ -222,38 +219,36 @@ ISR(ADC_vect) {
     signed long  TempI;
     signed long TempL;
     uint8_t i;
-
+    
     // Maintain multiplexing of input channels
     if (EmonLibPro::AdcId < VOLTSCOUNT + CURRENTCOUNT - 1) {
         ADMUX = _BV(REFS0) | adc_pin_order[(EmonLibPro::AdcId + 1)];   // Select next ADC
-        ADCSRA = adc_sra | _BV(ADSC);      // Start ADC conversion
+        ADCSRA = adc_sra | _BV(ADSC);                                  // Start ADC conversion
     } 
 
-    // ## 1 - Saves Previous read
-    // x[n+1] <- x[n]
-    EmonLibPro::Sample[EmonLibPro::AdcId].Previous=EmonLibPro::Sample[EmonLibPro::AdcId].Fresh;
-    EmonLibPro::Sample[EmonLibPro::AdcId].Fresh=ADC;
+
+    // ## 1 - Saves read on local var
+    unsigned int _fresh = ADC;
 
 
     // ## 2 - Apply filter for DC offset removal. Must use long data types for precision!
     // y[n] <- y[n-1]
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered;
-    
-    
+   
     //  y[n] = 0.996*y[n-1] + 0.996*x[n] - 0.996*x[n-1]
-    
     EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = 
                 0.996 * (EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered + 
-                         (EmonLibPro::Sample[EmonLibPro::AdcId].Fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous)
+                         (signed int)(_fresh - EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC)
                         );
-    
-    //EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = EmonLibPro::Sample[EmonLibPro::AdcId].Fresh - 512;
+
+
+    //EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = _fresh - 512;
     
     // Algorithm 1
     /*
     TempL=((long)EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered<<8)-EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered;
     TempL=TempL>>8;
-    TempI=EmonLibPro::Sample[EmonLibPro::AdcId].Fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous;
+    TempI=_fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous;
     TempL=TempL + (((long)TempI<<8)-(long)TempI);
     EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL;
     */
@@ -262,7 +257,7 @@ ISR(ADC_vect) {
     /*
     TempL=255*(long)EmonLibPro::Sample[EmonLibPro::AdcId].Filtered;
     TempL=TempL>>8;
-    TempI=EmonLibPro::Sample[EmonLibPro::AdcId].Fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous;
+    TempI=_fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous;
     TempL=TempL + 255*(long)TempI;
         TempL=TempL>>6;
     EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL;
@@ -270,14 +265,21 @@ ISR(ADC_vect) {
     
     // Algorithm 2
 /*
-    TempI=EmonLibPro::Sample[EmonLibPro::AdcId].Fresh - EmonLibPro::Sample[EmonLibPro::AdcId].Previous;  // find the input change
+    TempI=_fresh - EmonLibPro::Sample[EmonLibPro::AdcId].Previous;  // find the input change
     TempL= (long)TempI<<8;                                                 // rescale the input change (x256)
     TempL=TempL + EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered;  // add the previous o/p
     EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL-((long)TempL>>8); // subtract 1/256, same as x255/256
 */
 
 
-    // ## 3 - Apply phase calibration. Due to multiplexing, there will be a delay
+
+    // ## 3 - Saves Previous ADC read for next int
+    // x[n+1] <- x[n]
+    EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC=_fresh;
+
+
+
+    // ## 4 - Apply phase calibration. Due to multiplexing, there will be a delay
     // between subsequent data channels, as follows:
     //
     //  Delay = [ 360 degrees * f(mains) ] / [ 3 * f(sampling) ]
@@ -308,11 +310,11 @@ ISR(ADC_vect) {
     TempL=TempL>>16;
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousCalibrated = EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated;
     EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered-TempL;
-    
+
     //phaseShiftedV=lastV+((((long)newV-lastV)*I1PHASESHIFT)>>8);
 
 
-    // ## 4 - Perform Zero cross check
+    // ## 5 - Perform Zero cross check
     if (!EmonLibPro::Sample[EmonLibPro::AdcId].WaitNextCross) {
         EmonLibPro::Sample[EmonLibPro::AdcId].WaitNextCross=EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated < -32; // Only allow next zero cross if already passed this value on the cycle
     } else {
@@ -327,7 +329,7 @@ ISR(ADC_vect) {
     }
 
 
-    //## 5 - Saves timer val to calc freq later
+    //## 6 - Saves timer val to calc freq later
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousTimerVal = EmonLibPro::Sample[EmonLibPro::AdcId].TimerVal;
     EmonLibPro::Sample[EmonLibPro::AdcId].TimerVal = timerVal;    
 
@@ -360,9 +362,7 @@ ISR(ADC_vect) {
     if (EmonLibPro::AdcId < VOLTSCOUNT)
     {
         EmonLibPro::AccumulatorV[EmonLibPro::AdcId].U2 += (EmonLibPro::Temp[EmonLibPro::AdcId]*EmonLibPro::Temp[EmonLibPro::AdcId]);
-        EmonLibPro::AccumulatorV[EmonLibPro::AdcId].PERIOD += (TIMERTOP + (unsigned int) EmonLibPro::Sample[EmonLibPro::AdcId].PreviousTimerVal) - (unsigned int)timerVal;
-
-
+        EmonLibPro::AccumulatorV[EmonLibPro::AdcId].PeriodDiff += ((unsigned int) EmonLibPro::Sample[EmonLibPro::AdcId].PreviousTimerVal - (unsigned int)timerVal);
     }
     else
     {
@@ -375,7 +375,6 @@ ISR(ADC_vect) {
     
     }
 
-    
 
     // Last sensor reading
     if (EmonLibPro::AdcId == VOLTSCOUNT + CURRENTCOUNT - 1)
@@ -392,9 +391,8 @@ ISR(ADC_vect) {
             // The idea is to adjust timer to get a close to 0VAC read on the first measure of the next cycle.
             // Without PLL max resolution is 1/SAMPLESPSEC (0.83 ms for 1200samples/s)
             
-            TCNT1 = TCNT1 + ((unsigned int)EmonLibPro::Sample[0].Calibrated * (double)(PLLTIMERDELAYCOEF));
+            TCNT1 = TCNT1 + ((unsigned int)EmonLibPro::Sample[0].Calibrated * (float)(PLLTIMERDELAYCOEF));
             if((unsigned int)(EmonLibPro::Sample[0].Calibrated) > (CalCoeff.VRATIO[0] * 512/32)) { //min temporal resolution 
-                EmonLibPro::FlagPllUpdated=true;
                 EmonLibPro::pllUnlocked=EmonLibPro::SamplesPerCycle; // we're unlocked
             } else {
                 if(EmonLibPro::pllUnlocked) {
@@ -408,22 +406,14 @@ ISR(ADC_vect) {
 
             // When a full cycle of data has been accumulated; make a copy of accumulated
             // data before it is overwritten by next sampling instance.
+
             for (i=0;i<VOLTSCOUNT;i++){
                 EmonLibPro::CycleV[i].U2 = EmonLibPro::AccumulatorV[i].U2;
                 EmonLibPro::TotalV[i].U2 +=EmonLibPro::AccumulatorV[i].U2;
-                //Freq in centyHZ (Hz*100)
-               /* EmonLibPro::CycleV[i].cHZ = (unsigned long)(F_CPU*100) / 
-                                            (
-                                               ( (TIMERTOP * (uint8_t)(EmonLibPro::SamplesPerCycle))
-                                                 + (unsigned int) EmonLibPro::Sample[i].PreviousTimerVal
-                                               ) 
-                                               - (unsigned int)EmonLibPro::Sample[i].TimerVal  
-                                            ) ;
-               */
-                EmonLibPro::CycleV[i].cHZ = (unsigned long)(F_CPU*100) / (EmonLibPro::AccumulatorV[i].PERIOD );
-                EmonLibPro::TotalV[i].cHZ+=EmonLibPro::CycleV[i].cHZ;
+                EmonLibPro::CycleV[i].PeriodDiff = EmonLibPro::AccumulatorV[i].PeriodDiff;
+                EmonLibPro::TotalV[i].PeriodDiff += EmonLibPro::AccumulatorV[i].PeriodDiff;
                 EmonLibPro::AccumulatorV[i].U2 = 0;
-                EmonLibPro::AccumulatorV[i].PERIOD  = 0;
+                EmonLibPro::AccumulatorV[i].PeriodDiff  = 0;
             }
             for (i=0;i<CURRENTCOUNT;i++){
                 EmonLibPro::CycleP[i].I2 = EmonLibPro::AccumulatorP[i].I2;
@@ -444,9 +434,8 @@ ISR(ADC_vect) {
             }
 
         }
-
+        EmonLibPro::FlagOutOfTime = (TIFR1 & (1 << OCF1A));  // If timer counter is set we already missed a timer event. Signal this.
     }
 
     EmonLibPro::AdcId++;                // ADC index increment
-    EmonLibPro::FlagOutOfTime = (TIFR1 & (1 << OCF1A));  // If timer counter is set we already missed a timer event. Signal this.
 }
