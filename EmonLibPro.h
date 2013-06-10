@@ -94,7 +94,7 @@ const byte adc_sra = (1UL<<ADEN) |          // ADC Enable
 // Variables
 
 //const byte adc_pin_order[] = {4,1,2,3,0,5};     // ADC pin sampling order remap. First values must be Voltage, last Current.
-const byte adc_pin_order[] = {0,2,1,3,4,5};     // ADC pin sampling order remap. First values must be Voltage, last Current.
+const byte adc_pin_order[] = {0,1,2,3,4,5};     // ADC pin sampling order remap. First values must be Voltage, last Current.
 
 // Calibration Data Structure, change IRATIO/VRATIO if sensors count is changed.
 const struct     CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
@@ -118,33 +118,20 @@ const struct     CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
                                  };
                                  
                                  
-struct  AccVoltageDataStructure     { signed long U2, PERIOD; };
-struct  AccPowerDataStructure       { signed long P, I2;};
-struct  TotVoltageDataStructure     { unsigned long U2, cHZ; };
-struct  TotPowerDataStructure       { signed long P, I2;};
+struct  AccVoltageDataStructure     { unsigned long U2; signed int PeriodDiff;};
+struct  AccPowerDataStructure       { signed long P; unsigned long I2;};
+struct  TotVoltageDataStructure     { unsigned long U2; signed long PeriodDiff;};
+struct  TotPowerDataStructure       { signed long P; unsigned long I2;};
 struct  ResultVoltageDataStructure  { float U,HZ; };
 struct  ResultPowerDataStructure    { float I,P,S,F; };
 
-/*
-extern TotVoltageDataStructure      CycleV[VOLTSCOUNT];     //  |- Cycle Vars
-extern TotPowerDataStructure        CycleP[CURRENTCOUNT];   // -
-extern TotVoltageDataStructure      TotalV[VOLTSCOUNT];
-extern TotPowerDataStructure        TotalP[CURRENTCOUNT];
-extern ResultVoltageDataStructure   ResultV[VOLTSCOUNT];
-extern ResultPowerDataStructure     ResultP[CURRENTCOUNT];
-extern AccVoltageDataStructure     AccumulatorV[VOLTSCOUNT];
-extern AccPowerDataStructure       AccumulatorP[CURRENTCOUNT];
-*/
 
 struct  SampleStructure     {      boolean FlagZeroDetec, WaitNextCross;
-                                signed int Fresh        , Previous;
+                                unsigned int PreviousADC;
                                 signed int Filtered     , PreviousFiltered;
                                 signed int Calibrated   , PreviousCalibrated;
                                 unsigned int TimerVal, PreviousTimerVal;
                             };
-/*                                    
-extern  SampleStructure             Sample[VOLTSCOUNT + CURRENTCOUNT];
-*/
 
 class EmonLibPro
 {
@@ -172,7 +159,6 @@ class EmonLibPro
 
         // ISR vars
         static  uint8_t                  AdcId;                      // ADC PIN number of sensor measured
-        static  boolean                  FlagPllUpdated;             // Flags that PLL was updated
         static  SampleStructure          Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
         static  AccVoltageDataStructure  AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
         static  AccPowerDataStructure    AccumulatorP[CURRENTCOUNT]; // -/
@@ -181,6 +167,5 @@ class EmonLibPro
     private:
 };
 
-//extern EmonLibPro EmonLib;
 
 #endif /* emonLibPro_H */
