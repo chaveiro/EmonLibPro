@@ -192,9 +192,9 @@ void printCycle(byte i)
   Serial.print("Cycle");
     Serial.print(i);
     Serial.print(": ");
-	Serial.print(Emon.CycleV[i].U2);
+	Serial.print(Emon.CycleV[0].U2);
 	Serial.print(" ");
-	Serial.print(Emon.CycleV[i].cHZ);
+	Serial.print(Emon.CycleV[0].PeriodDiff);
 	Serial.print(" ");
 	Serial.print(Emon.CycleP[i].I2);
 	Serial.print(" ");
