@@ -28,4 +28,4 @@ History:
 1.0 - 25-05-2013 - First public release.
 1.1 - 02-06-2013 - Added suport for ADC pin MAP and revised freq calculations an timer1 fix.
 1.2 - 07-06-2013 - Speed up IRS routine a little. (Now 120 adc samples/sec for 3 sensors.)
-
+1.3 - 10-06-2013 - Speed up ISR by offloading freq calculation from ISR to user code.
