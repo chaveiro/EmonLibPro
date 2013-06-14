@@ -89,7 +89,7 @@ void EmonLibPro::calculateResult()
         byte i;
         for (i=0;i<VOLTSCOUNT;i++){
                 ResultV[i].U = CalCoeff.VRATIO[i] * (sqrt((float)TotalV[i].U2/SamplesPerCycleTotal)); //Vrms
-                ResultV[i].HZ = (float)(F_CPU) / ((TIMERTOP * (uint8_t)(SamplesPerCycleTotal/CyclesPerTotal)) + ((float)TotalV[i].PeriodDiff/CyclesPerTotal) );
+                ResultV[i].HZ = ((float)((F_CPU)*100) / ((TIMERTOP * (uint8_t)(SamplesPerCycleTotal/CyclesPerTotal)) + ((float)TotalV[i].PeriodDiff/CyclesPerTotal) ))/100;
                 TotalV[i].U2=0;
     			TotalV[i].PeriodDiff=0;
         }
@@ -226,57 +226,50 @@ ISR(ADC_vect) {
         ADCSRA = adc_sra | _BV(ADSC);                                  // Start ADC conversion
     } 
 
-
+	
     // ## 1 - Saves read on local var
     unsigned int _fresh = ADC;
 
-
+	
     // ## 2 - Apply filter for DC offset removal. Must use long data types for precision!
     // y[n] <- y[n-1]
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered;
    
     //  y[n] = 0.996*y[n-1] + 0.996*x[n] - 0.996*x[n-1]
-    EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = 
-                0.996 * (EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered + 
-                         (signed int)(_fresh - EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC)
-                        );
-
-
-    //EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = _fresh - 512;
-    
-    // Algorithm 1
+	// Algorith float point - >169cpu cycles
     /*
-    TempL=((long)EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered<<8)-EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered;
-    TempL=TempL>>8;
-    TempI=_fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous;
-    TempL=TempL + (((long)TempI<<8)-(long)TempI);
-    EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL;
-    */
+	EmonLibPro::Sample[EmonLibPro::AdcId].Filtered = 0.996 * (EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered + 
+                                              (signed int)(_fresh - EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC)  );
+	*/
 
-    // Algorithm ori
-    /*
-    TempL=255*(long)EmonLibPro::Sample[EmonLibPro::AdcId].Filtered;
-    TempL=TempL>>8;
-    TempI=_fresh-EmonLibPro::Sample[EmonLibPro::AdcId].Previous;
-    TempL=TempL + 255*(long)TempI;
-        TempL=TempL>>6;
-    EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL;
-    */
-    
-    // Algorithm 2
-/*
-    TempI=_fresh - EmonLibPro::Sample[EmonLibPro::AdcId].Previous;  // find the input change
+    // Algorithm Alt A - 36cpu cycles
+    TempI=(signed int)_fresh - (signed int)EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC;  // find the input change
     TempL= (long)TempI<<8;                                                 // rescale the input change (x256)
     TempL=TempL + EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered;  // add the previous o/p
     EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL-((long)TempL>>8); // subtract 1/256, same as x255/256
-*/
 
+	// Algorithm Alt B - 45cpu cycles
+    /*
+    TempL=(EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered<<8)-EmonLibPro::Sample[EmonLibPro::AdcId].PreviousFiltered;
+    TempL=TempL>>8;
+    TempI=(signed int)_fresh-(signed int)EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC;
+    TempL=TempL + (((long)TempI<<8)-(long)TempI);
+    EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL;
+    */
+ 
+    // Algorithm App note - 124cpu cycles
+	/*
+    TempL=255*(long)EmonLibPro::Sample[EmonLibPro::AdcId].Filtered;
+    TempL=TempL>>8;
+    TempI=(signed int)_fresh-(signed int)EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC;
+    TempL=TempL + 255*(long)TempI;
+    EmonLibPro::Sample[EmonLibPro::AdcId].Filtered=TempL;
+    */
 
-
+	
     // ## 3 - Saves Previous ADC read for next int
     // x[n+1] <- x[n]
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousADC=_fresh;
-
 
 
     // ## 4 - Apply phase calibration. Due to multiplexing, there will be a delay
@@ -309,7 +302,8 @@ ISR(ADC_vect) {
     TempL=TempL*CalCoeff.PCC[EmonLibPro::AdcId];
     TempL=TempL>>16;
     EmonLibPro::Sample[EmonLibPro::AdcId].PreviousCalibrated = EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated;
-    EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered-TempL;
+    //EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered-TempL;
+	EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated=(signed int)((EmonLibPro::Sample[EmonLibPro::AdcId].Filtered-TempL)>>8);
 
     //phaseShiftedV=lastV+((((long)newV-lastV)*I1PHASESHIFT)>>8);
 
