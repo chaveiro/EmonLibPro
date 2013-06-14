@@ -70,6 +70,7 @@
 
 // If a lower resolution than 10 bits is needed, the input clock frequency to the ADC can be higher than 200kHz to get a higher sample rate.
 const byte adc_sra = (1UL<<ADEN) |          // ADC Enable
+                     //(1UL<<ADATE) |         // ADC Auto Trigger Enable
                      (1UL<<ADIF) |          // ADC Interrupt Flag
                      (1UL<<ADIE) |          // ADC Interrupt Enable
                      (1UL<<ADPS2) |         // --- ADC Prescaler Select Bits /128 = 125kHz clock
@@ -128,7 +129,7 @@ struct  ResultPowerDataStructure    { float I,P,S,F; };
 
 struct  SampleStructure     {      boolean FlagZeroDetec, WaitNextCross;
                                 unsigned int PreviousADC;
-                                signed int Filtered     , PreviousFiltered;
+                                signed long Filtered     , PreviousFiltered;
                                 signed int Calibrated   , PreviousCalibrated;
                                 unsigned int TimerVal, PreviousTimerVal;
                             };
