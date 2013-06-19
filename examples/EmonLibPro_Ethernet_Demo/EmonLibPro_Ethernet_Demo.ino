@@ -31,7 +31,7 @@
 //#define CMS_HOST "192.168.1.250"                    // Host name
 #define CMS_PORT 80                                   // Port
 #define CMS_NODEID_PREFIX "1"                         // EmonCMS NodeId (x part on xY)
-#define CMS_APIKEY "fc9114ff558200d1fdd3f57194d8b712" // EmonCMS API KEY
+#define CMS_APIKEY "fc9134ff558200d1fdd3557094d1b762" // EmonCMS API KEY
 
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
@@ -45,6 +45,8 @@ char server[] = CMS_HOST;    // name address for Google (using DNS)
 // Set the static IP address to use if the DHCP fails to assign
 IPAddress ip(192,168,1,199);
 
+EthernetServer ethServer(80); // Initialize the Ethernet server library
+
 // Initialize the Ethernet client library
 // with the IP address and port of the server
 // that you want to connect to (port 80 is default for HTTP):
@@ -55,9 +57,13 @@ const int kNetworkTimeout = 1750;
 // Number of milliseconds to wait if no data is available before trying again
 const int kNetworkDelay = 50;
 
+
+EthernetClient srvClient;
+
+
 //--------------------------------------------------------------------------------------------------
 //Emon Vars
-byte i;
+byte i,x;
 int userCommand;
 
 void printCycle(byte i);
@@ -65,6 +71,7 @@ void printResults(byte i);
 void printMenu();
 void printStatus();
 void postEth();
+void ethDataTable();
 
 EmonLibPro  Emon ;
 
@@ -88,10 +95,51 @@ void setup()
 
 void loop()
 {
+  // listen for incoming clients
+  srvClient = ethServer.available();
+  
+	if(srvClient && Emon.FlagCYCLE_FULL) {
+		boolean currentLineIsBlank = true;
+		while (srvClient.connected()) {
+			if (srvClient.available()) {
+			  char c = srvClient.read();
+			  //Serial.write(c);
+			  // if you've gotten to the end of the line (received a newline
+			  // character) and the line is blank, the http request has ended,
+			  // so you can send a reply
+			  if (c == '\n' && currentLineIsBlank) {
+				// send a standard http response header
+				srvClient.println("HTTP/1.1 200 OK");
+				//srvClient.println("Content-Type: application/json");
+				//srvClient.println("Connection: close");  // the connection will be closed after completion of the response
+                                srvClient.println("Access-Control-Allow-Origin: *");
+                                //srvClient.println("Refresh: 5");  // refresh the page automatically every 5 sec
+				srvClient.println();
+				//srvClient.println("<!DOCTYPE HTML>");
+				//srvClient.println("<html>");
+				// output the value of each analog input pin
+                                ethDataTable();
+				//srvClient.println("</html>");
+				break;
+			  }
+			  if (c == '\n') {
+				// you're starting a new line
+				currentLineIsBlank = true;
+			  }
+			  else if (c != '\r') {
+				// you've gotten a character on the current line
+				currentLineIsBlank = false;
+			  }
+			}
+		}
+                srvClient.stop();
+		Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
+	}
+
   if(Emon.FlagCYCLE_FULL && userCommand == 1) {
-      for (i=0;i<CURRENTCOUNT;i++){
-          printCycle(i);
-      }
+      serialDataTable(0);
+      serialDataTable(1);
+      serialDataTable(2);
       Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
   }
   if(Emon.FlagCALC_READY && userCommand == 2) { 
@@ -121,6 +169,29 @@ void loop()
   }
   
 }
+
+void serialDataTable(byte b){
+        for (x=1;x<=41;x++){
+          Serial.print(Emon.Sample[b].CycleArr[x]);
+          Serial.print(",");
+        }
+        Serial.println("\t");
+}
+
+void ethDataTable(){
+  srvClient.print("[[\"V\",\"I1\",\"I2\"]");
+  for (x=1;x<=40;x++){
+    srvClient.print(",[");
+      srvClient.print(Emon.Sample[0].CycleArr[x]);
+    srvClient.print(",");
+      srvClient.print(Emon.Sample[1].CycleArr[x]);
+    srvClient.print(",");
+      srvClient.print(Emon.Sample[2].CycleArr[x]);
+    srvClient.print("]");
+  }
+  srvClient.print("]");
+}
+
 void ethInit(){
     // start the Ethernet connection:
   if (Ethernet.begin(mac) == 0) {
@@ -133,6 +204,10 @@ void ethInit(){
   }
   // give the Ethernet shield a second to initialize:
   delay(1000);
+
+  ethServer.begin();
+  Serial.println("ETH: Server started.");
+//  Serial.println(Ethernet.localIP());
 }
 
 void ethIpStatus(){
@@ -179,29 +254,15 @@ void ethDhcpMaintain(){
 
 
 void printMenu(){
-    Serial.println("EmonLipPro Demo");
-    Serial.println(" 1 - Print cycle data. (internal vars data for each cycle)");
+// Commented due to space contrains
+/*    Serial.println("EmonLipPro Demo");
+    Serial.println(" 1 - Print cycle data. (internal var data for each cycle)");
     Serial.println(" 2 - Print Calculated data. Change interval in define CALCULATESAMPLES.");
     Serial.println(" 3 - Print Lib Status.");
     Serial.println(" 4 - Post to server.");
-    Serial.println("Press a key...");
+*/    Serial.println("Press a key...");
 }
 
-void printCycle(byte i)
-{
-  Serial.print("Cycle");
-    Serial.print(i);
-    Serial.print(": ");
-	Serial.print(Emon.CycleV[0].U2);
-	Serial.print(" ");
-	Serial.print(Emon.CycleV[0].PeriodDiff);
-	Serial.print(" ");
-	Serial.print(Emon.CycleP[i].I2);
-	Serial.print(" ");
-	Serial.print(Emon.CycleP[i].P);
-    if(!Emon.pllUnlocked) Serial.print(" L");    
-	Serial.println("\t");
-}    
 
 void printResults(byte i)
 {
@@ -219,7 +280,9 @@ void printResults(byte i)
     Serial.print(Emon.ResultP[i].S);
     Serial.print("VA\t");
     Serial.print(Emon.ResultP[i].F);
-    Serial.println("Pfact");
+    Serial.print("Pfact");
+    if(!Emon.pllUnlocked) Serial.print(" L");    
+	Serial.println("\t");
 }
 
 
@@ -287,7 +350,6 @@ void postEth()
   }
   client.stop();
 }
-
 
 void printStatus()
 {
