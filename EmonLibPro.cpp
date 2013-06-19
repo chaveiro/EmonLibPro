@@ -21,6 +21,35 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/*	
+	---------------------------------------------------------------------------
+	Calibration
+	1 - Phase
+	The algorithm uses two subsequent samples to interpolate an intermediate point. 
+	This means that the higher the sampling frequency, the lower the phase adjustment
+	margin. At approximately 2000Hz sampling rate (666.66Hz per channel) and 50Hz mains
+	frequency, the highest phase delay that can be interpolated is 360 x (50Hz/666.66Hz) =
+	27 degrees.
+	The effect of the phase calibration coefficients is shown in the following equation:
+		Z = (PCC/65536) * (360º * Fm * 128 * 13 * 3 / Fclk)
+		
+		Fm = 50Hz Main frequency
+		Fclk = 16000000 System frequency
+		PCC = Phase calibration coefficient
+	
+	There is one phase calibration coefficient for each input channel, i.e. three in total.
+	Note, that the 16-bit phase calibration coefficients are treated unsigned.
+	
+	Apply nominal voltage and a large current to the meter. Voltage and current should be in 
+	phase, i.e. the power factor should be unity. Allow readings to stabilize and then 
+	record active power, voltage and current readings. Use voltage and current readings 
+	to calculate apparent power; S = U*I. Compare with active power readings and evaluate 
+	phase error, as follows: 
+		PE= acos(|P| / S)
+	Derive phase calibration coefficient based on phase error, and add the result to the
+	default phase calibration coefficient. 
+	
  */
 
 extern "C" {
@@ -43,8 +72,8 @@ boolean                     EmonLibPro::FlagCALC_READY;     // Flags new data re
 boolean                     EmonLibPro::FlagINVALID_DATA;   // Flags Invalid data
 uint8_t                     EmonLibPro::pllUnlocked;        // If = 0 pll is locked
 uint8_t                     EmonLibPro::SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (adjusted/detected by soft pll for each AC cycle)
-TotVoltageDataStructure     EmonLibPro::CycleV[VOLTSCOUNT];    //  |- Cycle Vars
-TotPowerDataStructure       EmonLibPro::CycleP[CURRENTCOUNT];  // -/
+
+
 unsigned long               EmonLibPro::SamplesPerCycleTotal;  // --- Number of cycles added for all sums of Total Var.
 unsigned int                EmonLibPro::CyclesPerTotal;       // --- Number of sums on Total var.
 TotVoltageDataStructure     EmonLibPro::TotalV[VOLTSCOUNT];    //  |- Total Vars (Sum of some cycles)
@@ -64,7 +93,7 @@ SampleStructure             EmonLibPro::Sample[VOLTSCOUNT + CURRENTCOUNT]; //Dat
 AccVoltageDataStructure     EmonLibPro::AccumulatorV[VOLTSCOUNT];   // --- Sum of all samples (copyed to cycle var at end of cycle)
 AccPowerDataStructure       EmonLibPro::AccumulatorP[CURRENTCOUNT]; // -/
 
-signed long                 EmonLibPro::Temp[VOLTSCOUNT + CURRENTCOUNT];     // Internal Aux vars
+signed int                 EmonLibPro::Temp[VOLTSCOUNT + CURRENTCOUNT];     // Internal Aux vars
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -91,7 +120,7 @@ void EmonLibPro::calculateResult()
                 ResultV[i].U = CalCoeff.VRATIO[i] * (sqrt((float)TotalV[i].U2/SamplesPerCycleTotal)); //Vrms
                 ResultV[i].HZ = ((float)((F_CPU)*100) / ((TIMERTOP * (uint8_t)(SamplesPerCycleTotal/CyclesPerTotal)) + ((float)TotalV[i].PeriodDiff/CyclesPerTotal) ))/100;
                 TotalV[i].U2=0;
-    			TotalV[i].PeriodDiff=0;
+				TotalV[i].PeriodDiff=0;
         }
 
         for (i=0;i<CURRENTCOUNT;i++){
@@ -119,14 +148,14 @@ void EmonLibPro::calculateResult()
         EmonLibPro::SamplesPerCycle=0;
         byte i;
         for (i=0;i<VOLTSCOUNT;i++){
-            EmonLibPro::CycleV[i].U2 = 0;
-            EmonLibPro::CycleV[i].PeriodDiff = 0;
+
+
             EmonLibPro::ResultV[i].U = 0;
             EmonLibPro::ResultV[i].HZ = 0;
         }
         for (i=0;i<CURRENTCOUNT;i++){
-            EmonLibPro::CycleP[i].I2 = 0;
-            EmonLibPro::CycleP[i].P = 0;
+
+
             EmonLibPro::ResultP[i].I = 0;
             EmonLibPro::ResultP[i].P = 0;
             EmonLibPro::ResultP[i].S = 0;
@@ -181,6 +210,7 @@ void EmonLibPro::begin()
 ISR(TIMER1_COMPA_vect) {
     ADMUX   = _BV(REFS0) | adc_pin_order[0]; // [AVCC with external capacitor at AREF pin] | [PIN=ADC0]
     ADCSRA = adc_sra | _BV(ADSC);            // Start ADC conversion
+
     EmonLibPro::AdcId=0;
     EmonLibPro::SamplesPerCycle++;
     if (EmonLibPro::SamplesPerCycle >= 200 && !EmonLibPro::FlagINVALID_DATA) { // Clean data when no zero cross detected.
@@ -216,7 +246,7 @@ ISR(TIMER1_COMPB_vect, ISR_NAKED)
 // ADC interrupt handler
 ISR(ADC_vect) {
     unsigned int timerVal = TCNT1;    // Saves timer counter for freq measurement
-    signed long  TempI;
+    signed int TempI;
     signed long TempL;
     uint8_t i;
     
@@ -307,6 +337,10 @@ ISR(ADC_vect) {
 
     //phaseShiftedV=lastV+((((long)newV-lastV)*I1PHASESHIFT)>>8);
 
+	if ((EmonLibPro::SamplesPerCycle <= 41)) {
+		EmonLibPro::Sample[EmonLibPro::AdcId].CycleArr[EmonLibPro::SamplesPerCycle]=EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated ;	
+		//EmonLibPro::Sample[EmonLibPro::AdcId].CycleArr[EmonLibPro::SamplesPerCycle]=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered>>8 ;	
+	}
 
     // ## 5 - Perform Zero cross check
     if (!EmonLibPro::Sample[EmonLibPro::AdcId].WaitNextCross) {
@@ -355,16 +389,16 @@ ISR(ADC_vect) {
 
     if (EmonLibPro::AdcId < VOLTSCOUNT)
     {
-        EmonLibPro::AccumulatorV[EmonLibPro::AdcId].U2 += (EmonLibPro::Temp[EmonLibPro::AdcId]*EmonLibPro::Temp[EmonLibPro::AdcId]);
+        EmonLibPro::AccumulatorV[EmonLibPro::AdcId].U2 += ((signed long)EmonLibPro::Temp[EmonLibPro::AdcId]*(signed long)EmonLibPro::Temp[EmonLibPro::AdcId]);
         EmonLibPro::AccumulatorV[EmonLibPro::AdcId].PeriodDiff += ((unsigned int) EmonLibPro::Sample[EmonLibPro::AdcId].PreviousTimerVal - (unsigned int)timerVal);
     }
     else
     {
-        EmonLibPro::AccumulatorP[EmonLibPro::AdcId-VOLTSCOUNT].I2 += (EmonLibPro::Temp[EmonLibPro::AdcId]*EmonLibPro::Temp[EmonLibPro::AdcId]);
+        EmonLibPro::AccumulatorP[EmonLibPro::AdcId-VOLTSCOUNT].I2 += ((signed long)EmonLibPro::Temp[EmonLibPro::AdcId]*(signed long)EmonLibPro::Temp[EmonLibPro::AdcId]);
         #if CURRENTCOUNT == VOLTSCOUNT
-        EmonLibPro::AccumulatorP[EmonLibPro::AdcId-VOLTSCOUNT].P += EmonLibPro::Temp[EmonLibPro::AdcId - CURRENTCOUNT]*EmonLibPro::Temp[EmonLibPro::AdcId];
+        EmonLibPro::AccumulatorP[EmonLibPro::AdcId-VOLTSCOUNT].P += ((signed long)EmonLibPro::Temp[EmonLibPro::AdcId - CURRENTCOUNT]*(signed long)EmonLibPro::Temp[EmonLibPro::AdcId]);
         #else
-        EmonLibPro::AccumulatorP[EmonLibPro::AdcId-VOLTSCOUNT].P += EmonLibPro::Temp[VOLTSCOUNT-1]*EmonLibPro::Temp[EmonLibPro::AdcId]; //V0 * I[AdcId]
+        EmonLibPro::AccumulatorP[EmonLibPro::AdcId-VOLTSCOUNT].P += ((signed long)EmonLibPro::Temp[VOLTSCOUNT-1]*(signed long)EmonLibPro::Temp[EmonLibPro::AdcId]); //V0 * I[AdcId]
         #endif
     
     }
@@ -402,17 +436,17 @@ ISR(ADC_vect) {
             // data before it is overwritten by next sampling instance.
 
             for (i=0;i<VOLTSCOUNT;i++){
-                EmonLibPro::CycleV[i].U2 = EmonLibPro::AccumulatorV[i].U2;
+
                 EmonLibPro::TotalV[i].U2 +=EmonLibPro::AccumulatorV[i].U2;
-                EmonLibPro::CycleV[i].PeriodDiff = EmonLibPro::AccumulatorV[i].PeriodDiff;
+
                 EmonLibPro::TotalV[i].PeriodDiff += EmonLibPro::AccumulatorV[i].PeriodDiff;
                 EmonLibPro::AccumulatorV[i].U2 = 0;
                 EmonLibPro::AccumulatorV[i].PeriodDiff  = 0;
             }
             for (i=0;i<CURRENTCOUNT;i++){
-                EmonLibPro::CycleP[i].I2 = EmonLibPro::AccumulatorP[i].I2;
+
                 EmonLibPro::TotalP[i].I2 +=EmonLibPro::AccumulatorP[i].I2;
-                EmonLibPro::CycleP[i].P = EmonLibPro::AccumulatorP[i].P;
+
                 EmonLibPro::TotalP[i].P +=EmonLibPro::AccumulatorP[i].P;
                 EmonLibPro::AccumulatorP[i].I2 = 0;
                 EmonLibPro::AccumulatorP[i].P = 0;
