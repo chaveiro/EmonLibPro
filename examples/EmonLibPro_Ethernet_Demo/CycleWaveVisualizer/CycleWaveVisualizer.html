@@ -1,0 +1,93 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+    <title>
+      EmonLibPro Wave
+    </title>
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.0/jquery.min.js"></script>
+    <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+      google.load('visualization', '1', {packages: ['corechart']});
+    google.setOnLoadCallback(init);
+	  
+	  window.onresize = char_draw;
+
+	  setInterval(drawVisualization, 500 );
+	  
+	  //Config with lib data to get real values
+	  var V1CAL = 245.23;
+	  var I1CAL = 10;
+	  var I2CAL = 10;
+	  var SUPPLY_VOLTS = 4.95;
+	  var EMONLIBPROURL = "http://192.168.1.70";
+	  
+	  
+	  var chart;
+	  var options;
+	  var dataView ;
+	  
+	  function init(){
+		  chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+		  options = { 	
+					title: 'Real time cycle data visualizer',
+					animation: {
+						duration: 1000,
+						easing: 'linear',
+					},
+					hAxis:{ title: 'Samples',
+						gridlines: { count: 10 }
+					},
+					vAxes:{
+						0:{title:'V'}, 
+						1:{title:'I', textStyle:{color: 'red'}, textPosition: 'in'}, 
+						2:{title:'W', textStyle:{color: 'green'}, textPosition: 'out'}
+					},
+					series:{
+						0:{targetAxisIndex:0},
+						1:{targetAxisIndex:1}, 
+						2:{targetAxisIndex:1}, 
+						3:{targetAxisIndex:2}, 
+					},
+					//curveType: 'function'
+					//width: 640, height: 480,
+					//vAxis: {maxValue: 1000}
+			};
+		drawVisualization();
+	  }
+	  
+      function drawVisualization() {
+	       jQuery.support.cors = true;
+            var jsonData = $.ajax({
+                url: EMONLIBPROURL,
+                dataType: "json",
+                async: false
+            }).responseText;
+			
+        var obj = $.parseJSON(jsonData);
+		var dataTable  = google.visualization.arrayToDataTable(obj);
+		dataView = new google.visualization.DataView(dataTable);
+		//0 Voltage
+		//1 I1
+		//2 I2
+		//3 Aparent power S1
+		dataView.setColumns([
+		{calc: function(data, row) { return  row + 1; }, type:'number', label:'Sample'},
+		{calc: function(data, row) { return  dataTable.getValue(row, 0) * (V1CAL * SUPPLY_VOLTS)/1024 ; }, type:'number', label:'V'},
+		{calc: function(data, row) { return  dataTable.getValue(row, 1) * (I1CAL * SUPPLY_VOLTS)/1024 ; }, type:'number', label:'I1'},
+		{calc: function(data, row) { return  dataTable.getValue(row, 2) * (I2CAL * SUPPLY_VOLTS)/1024 ; }, type:'number', label:'I2'},
+		{calc: function(data, row) { return (dataTable.getValue(row, 0) * (V1CAL * SUPPLY_VOLTS)/1024) * (dataTable.getValue(row, 1) * (I1CAL * SUPPLY_VOLTS)/1024); }, type:'number', label:'Aparent Power S1'}
+		]);
+
+		char_draw();
+      }
+	  
+	  function char_draw() {
+		chart.draw(dataView, options);
+	  }
+    </script>
+  </head>
+  <body style="font-family: Arial;border: 0 none;">
+    <div id="chart_div" style="width: 100%; height: 500px;"></div>
+  </body>
+</html>
