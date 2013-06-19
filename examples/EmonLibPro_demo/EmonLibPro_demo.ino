@@ -69,19 +69,13 @@ void setup()
 
 void loop()
 {
-  if(Emon.FlagCYCLE_FULL && userCommand == 1) {
-      for (i=0;i<CURRENTCOUNT;i++){
-          printCycle(i);
-      }
-      Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
-  }
-  if(Emon.FlagCALC_READY && userCommand == 2) { 
+  if(Emon.FlagCALC_READY && userCommand == 1) { 
       Emon.calculateResult();
       for (i=0;i<CURRENTCOUNT;i++){
         printResults(i);
       }
   }
-  if(userCommand == 3) {
+  if(userCommand == 2) {
         printStatus();
         userCommand = 0;
   }  
@@ -99,27 +93,10 @@ void loop()
 
 void printMenu(){
     Serial.println("EmonLipPro Demo");
-    Serial.println(" 1 - Print cycle data. (internal vars data for each cycle)");
-    Serial.println(" 2 - Print Calculated data. Change interval in define CALCULATESAMPLES.");
-    Serial.println(" 3 - Print Lib Status.");
+    Serial.println(" 1 - Print Calculated data. Change interval in define CALCULATESAMPLES.");
+    Serial.println(" 2 - Print Lib Status.");
     Serial.println("Press a key...");
 }
-
-void printCycle(byte i)
-{
-  Serial.print("Cycle");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(Emon.CycleV[0].U2);
-    Serial.print(" ");
-    Serial.print(Emon.CycleV[0].PeriodDiff);
-    Serial.print(" ");
-    Serial.print(Emon.CycleP[i].I2);
-    Serial.print(" ");
-    Serial.print(Emon.CycleP[i].P);
-    if(!Emon.pllUnlocked) Serial.print(" L");    
-    Serial.println("\t");
-}    
 
 void printResults(byte i)
 {
