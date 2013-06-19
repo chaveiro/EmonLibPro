@@ -104,8 +104,8 @@ const struct     CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
                                     unsigned int MC, DPC;
                                   } static CalCoeff = {
                                     {   0,      // {0,24576,49152,73728}angle offset - must set for each sensor 
-                                        24576,
-                                        49152,
+                                        23576,
+                                        47152,
                                         //73728
                                     },      
                                     {   (I1CAL * SUPPLY_VOLTS)/1024,      // current gain - must set a line for each I sensor
@@ -122,7 +122,7 @@ const struct     CalDataStructure { unsigned int PCC[VOLTSCOUNT + CURRENTCOUNT];
 struct  AccVoltageDataStructure     { unsigned long U2; signed int PeriodDiff;};
 struct  AccPowerDataStructure       { signed long P; unsigned long I2;};
 struct  TotVoltageDataStructure     { unsigned long U2; signed long PeriodDiff;};
-struct  TotPowerDataStructure       { signed long P; unsigned long I2;};
+struct  TotPowerDataStructure       { signed long P; unsigned long I2; };
 struct  ResultVoltageDataStructure  { float U,HZ; };
 struct  ResultPowerDataStructure    { float I,P,S,F; };
 
@@ -132,6 +132,7 @@ struct  SampleStructure     {      boolean FlagZeroDetec, WaitNextCross;
                                 signed long Filtered     , PreviousFiltered;
                                 signed int Calibrated   , PreviousCalibrated;
                                 unsigned int TimerVal, PreviousTimerVal;
+    							signed int CycleArr[41];
                             };
 
 class EmonLibPro
@@ -148,8 +149,6 @@ class EmonLibPro
         static  boolean         FlagOutOfTime;      // Warn ISR routing did not complete before next timer
         static  uint8_t         pllUnlocked;        // If = 0 pll is locked
         static  uint8_t                     SamplesPerCycle;       // --- Gives number of samples that got summed in summed Cycle Data Structure (ajusted/detected by soft pll for each AC cycle)
-        static  TotVoltageDataStructure     CycleV[VOLTSCOUNT];    //  |- Cycle Vars
-        static  TotPowerDataStructure       CycleP[CURRENTCOUNT];  // /
         static  unsigned long               SamplesPerCycleTotal;  // --- Number of cycles added for all sums of Total Var.
         static  unsigned int                CyclesPerTotal;        // --- Number of sums on Total var.
         static  TotVoltageDataStructure     TotalV[VOLTSCOUNT];    //  |- Total Vars (Sum of cycles until calculation)
@@ -163,7 +162,7 @@ class EmonLibPro
         static  SampleStructure          Sample[VOLTSCOUNT + CURRENTCOUNT]; //Data for last sample
         static  AccVoltageDataStructure  AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
         static  AccPowerDataStructure    AccumulatorP[CURRENTCOUNT]; // -/
-        static  signed long              Temp[VOLTSCOUNT + CURRENTCOUNT];    // Internal Aux var
+        static  signed int              Temp[VOLTSCOUNT + CURRENTCOUNT];    // Internal Aux var
         
     private:
 };
