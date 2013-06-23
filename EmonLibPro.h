@@ -60,7 +60,9 @@
 
 
 // Does not work, first adc read after sleep is garbage.
-#undef ARDUINO_HI_RES         // Uncomment this line to optimize lib for hi precision on Timer1 with sleep trick.
+//#define ARDUINO_HI_RES         // Uncomment this line to optimize lib for hi precision on Timer1 with sleep trick.
+//#define USE_ANALOG_COMP       // Specifies the usage of analog comparator for zero cross check. Requires ADC0 voltage connected to analog comp.
+
 
 // Don't modify below this line
 //--------------------------------------------------------------------------------------------------
@@ -132,7 +134,7 @@ struct  SampleStructure     {      boolean FlagZeroDetec, WaitNextCross;
                                 signed long Filtered     , PreviousFiltered;
                                 signed int Calibrated   , PreviousCalibrated;
                                 unsigned int TimerVal, PreviousTimerVal;
-    							signed int CycleArr[41];
+    							signed int CycleArr[51];
                             };
 
 class EmonLibPro
@@ -163,7 +165,6 @@ class EmonLibPro
         static  AccVoltageDataStructure  AccumulatorV[VOLTSCOUNT];   //  |- Sum of all samples (copyed to cycle var at end of cycle)
         static  AccPowerDataStructure    AccumulatorP[CURRENTCOUNT]; // -/
         static  signed int              Temp[VOLTSCOUNT + CURRENTCOUNT];    // Internal Aux var
-        
     private:
 };
 
