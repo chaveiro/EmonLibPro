@@ -93,7 +93,6 @@ AccPowerDataStructure       EmonLibPro::AccumulatorP[CURRENTCOUNT]; // -/
 
 signed int                 EmonLibPro::Temp[VOLTSCOUNT + CURRENTCOUNT];     // Internal Aux vars
 
-boolean EmonLibPro::TESTE;
 //////////////////////////////////////////////////////////////////////////
 // Functions
 //////////////////////////////////////////////////////////////////////////
@@ -246,36 +245,12 @@ ISR(TIMER1_COMPA_vect) {
 #ifdef USE_ANALOG_COMP
 ISR(TIMER1_CAPT_vect)
 {
-    EmonLibPro::TESTE = true;
 	if (EmonLibPro::Sample[0].WaitNextCross) {
 		EmonLibPro::Sample[0].FlagZeroDetec = true;
 		EmonLibPro::Sample[0].WaitNextCross=false;
 	}
-    //TCNT1 = 0;
-	//if (EmonLibPro::SamplesPerCycle > 38){
-	//	EmonLibPro::Sample[0].FlagZeroDetec=true;
-     //ACSR &= ~(1UL<<ACIE);    // Analog Comparator Interrupt disable
-	//}
-    //EmonLibPro::AdcId=0;
-    //ADMUX   = _BV(REFS0) | adc_pin_order[0]; // [AVCC with external capacitor at AREF pin] | [PIN=ADC0]
-    //ADCSRA = adc_sra | _BV(ADSC);            // Start ADC conversion
-    
+   
 }
-
-/*ISR(ANALOG_COMP_vect)
-{
-
-    //TCNT1 = 0;
-	//if (EmonLibPro::SamplesPerCycle > 38){
-		//EmonLibPro::Sample[0].FlagZeroDetec=true;
-     //ACSR &= ~(1UL<<ACIE);    // Analog Comparator Interrupt disable
-	//}
-    //EmonLibPro::AdcId=0;
-    //ADMUX   = _BV(REFS0) | adc_pin_order[0]; // [AVCC with external capacitor at AREF pin] | [PIN=ADC0]
-    //ADCSRA = adc_sra | _BV(ADSC);            // Start ADC conversion
-    //    if  (ACSR & (1 << ACO))  {
-	//		ACSR &= ~(1UL<<ACO) ; // clear zero cross det
-}*/
 #endif
 
 #ifdef ARDUINO_HI_RES
@@ -383,15 +358,7 @@ ISR(ADC_vect) {
 	EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated=(signed int)((EmonLibPro::Sample[EmonLibPro::AdcId].Filtered-TempL)>>8);
 
 	if ((EmonLibPro::SamplesPerCycle <= 51)) {
-		if (EmonLibPro::AdcId == 2) {
-			//EmonLibPro::Sample[2].CycleArr[EmonLibPro::SamplesPerCycle]=((ACSR & (1 << ACO)) ? 100 : 0);
-			//ACSR &= ~(1UL<<ACO) ; // clear zero cross det
-			EmonLibPro::Sample[2].CycleArr[EmonLibPro::SamplesPerCycle]=(EmonLibPro::TESTE==true ? 50 : 0);
-			EmonLibPro::TESTE = false;
-		} else {
-			EmonLibPro::Sample[EmonLibPro::AdcId].CycleArr[EmonLibPro::SamplesPerCycle]=EmonLibPro::Sample[EmonLibPro::AdcId].Calibrated ;
-		}
-		//EmonLibPro::Sample[EmonLibPro::AdcId].CycleArr[EmonLibPro::SamplesPerCycle]=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered>>8 ;	
+		EmonLibPro::Sample[EmonLibPro::AdcId].CycleArr[EmonLibPro::SamplesPerCycle]=EmonLibPro::Sample[EmonLibPro::AdcId].Filtered>>8 ;	
 	}
 
     // ## 5 - Perform Zero cross check
@@ -475,9 +442,9 @@ ISR(ADC_vect) {
             // ### PLL processing ###
             // The idea is to adjust timer to get a close to 0VAC read on the first measure of the next cycle.
             // Without PLL max resolution is 1/SAMPLESPSEC (0.83 ms for 1200samples/s)
-#ifndef USE_ANALOG_COMP   
+//#ifndef USE_ANALOG_COMP   
             TCNT1 = TCNT1 + ((unsigned int)EmonLibPro::Sample[0].Calibrated * (float)(PLLTIMERDELAYCOEF));
-#endif
+//#endif
             if((unsigned int)(EmonLibPro::Sample[0].Calibrated) > (CalCoeff.VRATIO[0] * 512/32)) { //min temporal resolution 
                 EmonLibPro::pllUnlocked=EmonLibPro::SamplesPerCycle; // we're unlocked
             } else {
