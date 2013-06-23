@@ -9,11 +9,11 @@
     <script type="text/javascript" src="http://www.google.com/jsapi"></script>
     <script type="text/javascript">
       google.load('visualization', '1', {packages: ['corechart']});
-    google.setOnLoadCallback(init);
+	  google.setOnLoadCallback(init);
 	  
 	  window.onresize = char_draw;
 
-	  setInterval(drawVisualization, 500 );
+	  setInterval(drawVisualization, 1000 );
 	  
 	  //Config with lib data to get real values
 	  var V1CAL = 245.23;
@@ -31,8 +31,9 @@
 		  chart = new google.visualization.LineChart(document.getElementById('chart_div'));
 		  options = { 	
 					title: 'Real time cycle data visualizer',
+					pointSize: 2,
 					animation: {
-						duration: 1000,
+						duration: 750,
 						easing: 'linear',
 					},
 					hAxis:{ title: 'Samples',
@@ -49,6 +50,7 @@
 						2:{targetAxisIndex:1}, 
 						3:{targetAxisIndex:2}, 
 					},
+					
 					//curveType: 'function'
 					//width: 640, height: 480,
 					//vAxis: {maxValue: 1000}
@@ -76,7 +78,7 @@
 		{calc: function(data, row) { return  dataTable.getValue(row, 0) * (V1CAL * SUPPLY_VOLTS)/1024 ; }, type:'number', label:'V'},
 		{calc: function(data, row) { return  dataTable.getValue(row, 1) * (I1CAL * SUPPLY_VOLTS)/1024 ; }, type:'number', label:'I1'},
 		{calc: function(data, row) { return  dataTable.getValue(row, 2) * (I2CAL * SUPPLY_VOLTS)/1024 ; }, type:'number', label:'I2'},
-		{calc: function(data, row) { return (dataTable.getValue(row, 0) * (V1CAL * SUPPLY_VOLTS)/1024) * (dataTable.getValue(row, 1) * (I1CAL * SUPPLY_VOLTS)/1024); }, type:'number', label:'Aparent Power S1'}
+		{calc: function(data, row) { return (dataTable.getValue(row, 0) * (V1CAL * SUPPLY_VOLTS)/1024) * (dataTable.getValue(row, 1) * (I1CAL * SUPPLY_VOLTS)/1024); }, type:'number', label:'Active Power S1'}
 		]);
 
 		char_draw();
