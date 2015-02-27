@@ -3,14 +3,18 @@
     Based on emonTx hardware from OpenEnergyMonitor http://openenergymonitor.org/emon/
     This is a generic library for any voltage and current sensors.
     Interrupt based, implements a zero cross detector and phase-locked loop for better precision.
+    Reports Voltage, Frequency, Current, Active Power, Aparent Power and Power Factor.
     Completely line frequency independent.
+    This library idea cames from ATMEL AVR465: Single-Phase Power/Energy Meter.
     
-    Copyright (C) 2013  Nuno Chaveiro  nchaveiro[at]gmail.com  Lisbon, Portugal
+    Get latest version at https://github.com/chaveiro/EmonLibPro
+    
+    Copyright (C) 2013-2015  Nuno Chaveiro  nchaveiro[at]gmail.com  Lisbon, Portugal
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
-     any later version.
+    any later version.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,58 +34,39 @@
 #define CMS_HOST "emon.server.com"                  // Host name
 //#define CMS_HOST "192.168.1.250"                    // Host name
 #define CMS_PORT 80                                   // Port
-#define CMS_NODEID_PREFIX "1"                         // EmonCMS NodeId (x part on xY)
+#define CMS_NODEID_PREFIX "0"                         // EmonCMS NodeId (x part on xY)
 #define CMS_APIKEY "fc9134ff558200d1fdd3557094d1b762" // EmonCMS API KEY
 
-// Enter a MAC address for your controller below.
-// Newer Ethernet shields have a MAC address printed on a sticker on the shield
-byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x35, 0xA5 };
+// MAC address for your controller (See sticker on the shield)
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x00, 0x35, 0xA0 }; 
 
-// if you don't want to use DNS (and reduce your sketch size)
-// use the numeric IP instead of the name for the server:
-//IPAddress server(74,125,232,128);  // numeric IP for Google (no DNS)
-char server[] = CMS_HOST;    // name address for Google (using DNS)
+// If you don't want to use DNS (and reduce your sketch size) use numeric IP
+//IPAddress server(74,125,232,128); // numeric IP (no DNS)
+char server[] = CMS_HOST;           // name address (using DNS)
+IPAddress ip(192,168,1,199);        // Static IP address to use if the DHCP fails to assign
+EthernetServer ethServer(80);       // Init Ethernet server library
+EthernetClient client;              // Init Ethernet client with IP address and port of the server
 
-// Set the static IP address to use if the DHCP fails to assign
-IPAddress ip(192,168,1,199);
-
-EthernetServer ethServer(80); // Initialize the Ethernet server library
-
-// Initialize the Ethernet client library
-// with the IP address and port of the server
-// that you want to connect to (port 80 is default for HTTP):
-EthernetClient client;
-
-// Number of milliseconds to wait without receiving any data before we give up
-const int kNetworkTimeout = 1750;
-// Number of milliseconds to wait if no data is available before trying again
-const int kNetworkDelay = 50;
-
+const int kNetworkTimeout = 1750;   // Wait timeout for receiving data
+const int kNetworkDelay = 50;       // Wait if no data is available before trying again
 
 EthernetClient srvClient;
 
 
 //--------------------------------------------------------------------------------------------------
 //Emon Vars
-byte i,x;
 int userCommand;
+EmonLibPro Emon;
 
-void printCycle(byte i);
-void printResults(byte i);
-void printMenu();
-void printStatus();
-void postEth();
-void ethDataTable();
-
-EmonLibPro  Emon ;
 
 void setup()
 {
-  Serial.begin(230400);
-  Serial.println("Ready");
+  Serial.begin(9600);
+  Serial.print("EMON: v");
+  Serial.println(EMONLIBPROVERSION);
   
-  Emon = EmonLibPro();    // Required.  
-  Emon.begin();
+  Emon = EmonLibPro();    // Required
+  Emon.begin();           // Required
   
   ethInit();
 
@@ -90,74 +75,53 @@ void setup()
   delay(1000); 
 
   printMenu();
-  userCommand = 4;
+  userCommand = 5;
 }
 
 void loop()
 {
   // listen for incoming clients
   srvClient = ethServer.available();
-  
-	if(srvClient && Emon.FlagCYCLE_FULL) {
-		boolean currentLineIsBlank = true;
-		while (srvClient.connected()) {
-			if (srvClient.available()) {
-			  char c = srvClient.read();
-			  //Serial.write(c);
-			  // if you've gotten to the end of the line (received a newline
-			  // character) and the line is blank, the http request has ended,
-			  // so you can send a reply
-			  if (c == '\n' && currentLineIsBlank) {
-				// send a standard http response header
-				srvClient.println("HTTP/1.1 200 OK");
-				//srvClient.println("Content-Type: application/json");
-				//srvClient.println("Connection: close");  // the connection will be closed after completion of the response
-                                srvClient.println("Access-Control-Allow-Origin: *");
-                                //srvClient.println("Refresh: 5");  // refresh the page automatically every 5 sec
-				srvClient.println();
-				//srvClient.println("<!DOCTYPE HTML>");
-				//srvClient.println("<html>");
-				// output the value of each analog input pin
-                                ethDataTable();
-				//srvClient.println("</html>");
-				break;
-			  }
-			  if (c == '\n') {
-				// you're starting a new line
-				currentLineIsBlank = true;
-			  }
-			  else if (c != '\r') {
-				// you've gotten a character on the current line
-				currentLineIsBlank = false;
-			  }
-			}
-		}
-                srvClient.stop();
-		Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
-	}
 
-  if(Emon.FlagCYCLE_FULL && userCommand == 1) {
-      serialDataTable(0);
-      serialDataTable(1);
-      serialDataTable(2);
-      Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
+  if(srvClient && Emon.FlagCYCLE_FULL && EmonLibPro::FlagCYCLE_DIAG) {
+      serverEth();
+      EmonLibPro::FlagCYCLE_DIAG = false;  //Must reset after read to know next batch
+      //Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
+  }else if(srvClient && !EmonLibPro::FlagCYCLE_DIAG) {
+      EmonLibPro::FlagCYCLE_DIAG = true;  //Must reset after read to know next batch.
   }
-  if(Emon.FlagCALC_READY && userCommand == 2) { 
+
+  
+  if(userCommand == 1 && Emon.FlagCALC_READY) { 
       Emon.calculateResult();
-      for (i=0;i<CURRENTCOUNT;i++){
+      for (byte i=0;i<CURRENTCOUNT;i++){
         printResults(i);
       }
   }
-  if(userCommand == 3) {
-        printStatus();
+  
+  if(userCommand == 2 && Emon.FlagCYCLE_FULL) {
+      for (byte i=0;i<VOLTSCOUNT + CURRENTCOUNT;i++){
+        Serial.print("ADC");
+        Serial.print(0+i);
+        Serial.print(",");
+        serialDataTable(i);
+      }
+      Emon.FlagCYCLE_FULL = false;  //Must reset after read to know next batch.
+  }
+  
+  if(userCommand == 3 && Emon.FlagCALC_READY) {
+        Emon.printStatus();
         userCommand = 0;
   }  
-  
-  if(Emon.FlagCALC_READY && userCommand == 4) {
+
+  if (userCommand == 4 && EmonLibPro::FlagOutOfTime) { // This should never be true.  Reduce sampling rate if it is!
+	Serial.println("$");         // Alarm that previous ADC processing has run out of time before timer event. Must decrease SAMPLESPSEC
+  }
+
+  if(userCommand == 5 && Emon.FlagCALC_READY) {
         Emon.calculateResult();
         postEth();
-  }  
-
+  }
 
   ethDhcpMaintain();      // Maintain dhcp refresh
   
@@ -170,28 +134,10 @@ void loop()
   
 }
 
-void serialDataTable(byte b){
-        for (x=1;x<=41;x++){
-          Serial.print(Emon.Sample[b].CycleArr[x]);
-          Serial.print(",");
-        }
-        Serial.println("\t");
-}
 
-void ethDataTable(){
-  srvClient.print("[[\"V\",\"I1\",\"I2\"]");
-  for (x=1;x<=40;x++){
-    srvClient.print(",[");
-      srvClient.print(Emon.Sample[0].CycleArr[x]);
-    srvClient.print(",");
-      srvClient.print(Emon.Sample[1].CycleArr[x]);
-    srvClient.print(",");
-      srvClient.print(Emon.Sample[2].CycleArr[x]);
-    srvClient.print("]");
-  }
-  srvClient.print("]");
-}
-
+// #########################################################################
+// ## Ethernet support
+// #########################################################################
 void ethInit(){
     // start the Ethernet connection:
   if (Ethernet.begin(mac) == 0) {
@@ -203,15 +149,15 @@ void ethInit(){
       Serial.println("ETH: DHCP ok");
   }
   // give the Ethernet shield a second to initialize:
-  delay(1000);
+  delay(500);
 
   ethServer.begin();
   Serial.println("ETH: Server started.");
-//  Serial.println(Ethernet.localIP());
+  ethIpStatus();
 }
 
+// Print your local IP address:
 void ethIpStatus(){
-    // print your local IP address:
   Serial.print("ETH: IP=");
   for (byte thisByte = 0; thisByte < 4; thisByte++) {
     // print the value of each byte of the IP address:
@@ -221,15 +167,8 @@ void ethIpStatus(){
   Serial.println();
 }
 
+// Mantain DHCP leases
 void ethDhcpMaintain(){
-/*
-    returns:
-    0/DHCP_CHECK_NONE: nothing happened
-    1/DHCP_CHECK_RENEW_FAIL: renew failed
-    2/DHCP_CHECK_RENEW_OK: renew success
-    3/DHCP_CHECK_REBIND_FAIL: rebind fail
-    4/DHCP_CHECK_REBIND_OK: rebind success
-*/
   int rc = Ethernet.maintain();    
   switch ( rc ){
     case DHCP_CHECK_NONE:
@@ -246,50 +185,82 @@ void ethDhcpMaintain(){
       ethIpStatus();
       break;
     default:
-      Serial.print("ETH: DHCP other");
-      //this is actually a error, it will retry though
+      Serial.print("ETH: DHCP other"); //this is actually a error, it will retry though
       break;
   }
 }
 
-
-void printMenu(){
-// Commented due to space contrains
-/*    Serial.println("EmonLipPro Demo");
-    Serial.println(" 1 - Print cycle data. (internal var data for each cycle)");
-    Serial.println(" 2 - Print Calculated data. Change interval in define CALCULATESAMPLES.");
-    Serial.println(" 3 - Print Lib Status.");
-    Serial.println(" 4 - Post to server.");
-*/    Serial.println("Press a key...");
+// Awnsers back to a connecting client the current cycle vars
+void serverEth() {
+  //  Serial.print("ETH: Server...");
+  boolean currentLineIsBlank = true;
+  unsigned long timeoutStart = millis();
+  char c;
+  while ((srvClient.connected() || srvClient.available()) &&
+         (millis() - timeoutStart < (int)kNetworkTimeout)) {
+    if (srvClient.available()) {
+  	  c = srvClient.read();
+  	  //Serial.write(c);
+  	  // If you've gotten to the end of the line (received a newline character) and the line is blank,
+          // the http request has ended, so you can send a reply
+  	  if (c == '\n' && currentLineIsBlank) {
+  		// send a standard http response header
+  		srvClient.println("HTTP/1.1 200 OK");
+  		//srvClient.println("Content-Type: application/json");
+  		//srvClient.println("Connection: close");  // the connection will be closed after completion of the response
+  		srvClient.println("Access-Control-Allow-Origin: *");
+  		//srvClient.println("Refresh: 5");  // refresh the page automatically every 5 sec
+  		srvClient.println();
+  		//srvClient.println("<!DOCTYPE HTML>");
+  		//srvClient.println("<html>");
+  		ethDataTable();
+  		//srvClient.println("</html>");
+  		break;
+  	  }
+  	  if (c == '\n') {
+  		currentLineIsBlank = true;  // you're starting a new line
+  	  }
+  	  else if (c != '\r') {
+  		currentLineIsBlank = false;  // you've gotten a character on the current line
+  	  }
+    timeoutStart = millis();  //reset the timeout counter
+    } else {
+          delay(kNetworkDelay);  // We haven't got any data, so let's pause to allow some to arrive
+    }
+  }
+  srvClient.stop();
 }
 
-
-void printResults(byte i)
-{
-    Serial.print("Result");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(Emon.ResultV[0].U);
-    Serial.print("VAC\t");
-    Serial.print(Emon.ResultV[0].HZ);
-    Serial.print("Hz\t");
-    Serial.print(Emon.ResultP[i].I);
-    Serial.print("A\t");
-    Serial.print(Emon.ResultP[i].P);
-    Serial.print("W\t");
-    Serial.print(Emon.ResultP[i].S);
-    Serial.print("VA\t");
-    Serial.print(Emon.ResultP[i].F);
-    Serial.print("Pfact");
-    if(!Emon.pllUnlocked) Serial.print(" L");    
-	Serial.println("\t");
+// This is part of the answer to a connecting client
+void ethDataTable(){
+  byte i,x;
+  int sizearr = (Emon.SamplesPerCycleTotal/Emon.CyclesPerTotal);
+  if (sizearr > CYCLEARRSIZE) sizearr = CYCLEARRSIZE;
+  
+  srvClient.print("[[");
+  for (i=0;i<VOLTSCOUNT + CURRENTCOUNT;i++){
+    if (i>0) srvClient.print(",");
+    srvClient.print("\"ADC");
+    srvClient.print(0+i);
+    srvClient.print("\"");
+  }
+  srvClient.print("],[");
+  for (x=0;x<=(sizearr)-1;x++){
+    if (x>0) srvClient.print(",[");
+      for (i=0;i<VOLTSCOUNT + CURRENTCOUNT;i++){
+      if (i>0) srvClient.print(",");
+      srvClient.print(Emon.Sample[i].CycleArr[x]);
+    }
+    srvClient.print("]");
+  }
+  srvClient.print("]");
 }
 
-
+// Post to server the current result
 void postEth()
 {
-  Serial.print("ETH: Post...");
-
+  byte i;
+//  Serial.print("ETH: Post...");
   if (client.connect(server, CMS_PORT)) {
     // Make a HTTP request:
     //http://emon.server.com/input/bulk.json?data=[[0,1,10,20,30,40,50,60]]
@@ -313,8 +284,10 @@ void postEth()
       client.print(Emon.ResultP[i].S);
       client.print(",");
       client.print(Emon.ResultP[i].F);
+#ifdef USEPLL
       client.print(",");
       client.print(Emon.pllUnlocked);
+#endif
       client.print("]");
     }
     client.print("]");
@@ -323,14 +296,14 @@ void postEth()
     client.println("User-Agent: EmonLibPro");
     client.println("Connection: close");
     client.println();
-    Serial.print("Sent");
+    //Serial.print("ETH: Post");
   
     // Now we've got to the response
     unsigned long timeoutStart = millis();
     char c;
     // Whilst we haven't timed out & haven't reached the end of the body
     while ((client.connected() || client.available()) &&
-           (millis() - timeoutStart < kNetworkTimeout))
+           (millis() - timeoutStart < (int)kNetworkTimeout))
     {
         if (client.available())
         {
@@ -341,32 +314,64 @@ void postEth()
         }
         else
         {
-            // We haven't got any data, so let's pause to allow some to arrive
-            delay(kNetworkDelay);
+            delay(kNetworkDelay);  // We haven't got any data, so let's pause to allow some to arrive
         }
     }
   } else {
-    Serial.print("Fail");    // didn't get a connection to the server:
+    Serial.print("ETH: Post Fail");    // didn't get a connection to the server:
   }
   client.stop();
 }
 
-void printStatus()
+
+
+// #########################################################################
+// ## Serial support
+// #########################################################################
+void printMenu(){
+/*    Serial.println("EmonLipPro Demo");
+    Serial.println(" 1 - Print cycle data. (internal var data for each cycle)");
+    Serial.println(" 2 - Print Calculated data. Change interval in define CALCULATECYCLES.");
+    Serial.println(" 3 - Print Lib Status.");
+    Serial.println(" 4 - Check if sample rate is acceptable. Should not see the $ char.");
+    Serial.println(" 5 - Post to server.");
+*/    Serial.println("Press a key...");
+}
+
+
+// Print calculated results
+void printResults(byte i)
 {
-  if (Emon.FlagOutOfTime) Serial.println("ERROR: Timer has overflown, reduce SAMPLESPSEC.");
-  if(Emon.pllUnlocked) { 
-      Serial.println("PLL: Unlocked");
-  } else {
-      Serial.println("PLL: Locked");
-  } 
-  Serial.print("ADC samples per Cycle: ");
-  Serial.println((Emon.SamplesPerCycleTotal/Emon.CyclesPerTotal) * (VOLTSCOUNT + CURRENTCOUNT));
-  Serial.print("VOLTSCOUNT: ");
-  Serial.println(VOLTSCOUNT);
-  Serial.print("CURRENTCOUNT: ");
-  Serial.println(CURRENTCOUNT);
-  Serial.print("SAMPLESPSEC: ");
-  Serial.println(SAMPLESPSEC);
-  Serial.print("CALCULATESAMPLES: ");
-  Serial.println(CALCULATESAMPLES);
+    Serial.print("Result");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(Emon.ResultV[0].U);
+    Serial.print("VAC\t");
+    Serial.print(Emon.ResultV[0].HZ);
+    Serial.print("Hz\t");
+    Serial.print(Emon.ResultP[i].I);
+    Serial.print("A\t");
+    Serial.print(Emon.ResultP[i].P);
+    Serial.print("W\t");
+    Serial.print(Emon.ResultP[i].S);
+    Serial.print("VA\t");
+    Serial.print(Emon.ResultP[i].F);
+    Serial.print("Pfact");
+#ifdef USEPLL
+    if(!Emon.pllUnlocked) Serial.print(" L");
+#endif
+    Serial.println("\t");
+}
+
+
+// Exposes the internal sampled values for all samples on a cycle
+// Usefull to display the signal on a graph.
+void serialDataTable(byte b){
+  int sizearr = (Emon.SamplesPerCycleTotal/Emon.CyclesPerTotal);
+  if (sizearr > CYCLEARRSIZE) sizearr = CYCLEARRSIZE;
+  for (byte i=0;i<=sizearr;i++){
+    Serial.print(Emon.Sample[b].CycleArr[i]);
+    Serial.print(",");
+  }
+  Serial.println("\t");
 }
