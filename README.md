@@ -1,11 +1,13 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/815168b5f0b1497798c6ccf8b3b7c25e)](https://www.codacy.com/app/nchaveiro/EmonLibPro?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=chaveiro/EmonLibPro&amp;utm_campaign=Badge_Grade)
+
+```
   ______                       _      _ _     _____           
  |  ____|                     | |    (_) |   |  __ \          
  | |__   _ __ ___   ___  _ __ | |     _| |__ | |__) | __ ___  
  |  __| | '_ ` _ \ / _ \| '_ \| |    | | '_ \|  ___/ '__/ _ \ 
  | |____| | | | | | (_) | | | | |____| | |_) | |   | | | (_) |
  |______|_| |_| |_|\___/|_| |_|______|_|_.__/|_|   |_|  \___/ 
-                                                             
+```                                                       
 * Example folder contains an Arduino Library Demo.
 * Help and support: http://openenergymonitor.org/emon/node/2406
 
