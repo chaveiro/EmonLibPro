@@ -26,7 +26,7 @@ This library idea cames from ATMEL AVR465: Single-Phase Power/Energy Meter.
 Edit configuration in EmonLibPro.h.
 
 Author: Nuno Chaveiro  nchaveiro[at]gmail.com  Lisbon, Portugal
-
+```
 History:
     1.0 - 25-05-2013 - First public release.
     1.1 - 02-06-2013 - Added suport for ADC pin MAP and revised freq calculations and timer1 fix.
@@ -37,3 +37,4 @@ History:
     2.0 - 21-02-2015 - Changed ADC Triger from Timer1 A comparator to Timer1 B comparator with ADC hardware auto trigger activated. Less gitter.
                        Improved line frequency calculation by now using full Timer1 range.
                        Added auto sample rate detection mode. Adjusts automaticaly max attainable sample rate for any line frequency.
+```
